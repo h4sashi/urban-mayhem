@@ -1,5 +1,7 @@
 using System.Collections;
 using UnityEngine;
+using Cinemachine;
+using Hanzo.Player.Controllers;
 
 namespace Hanzo.VFX
 {
@@ -30,6 +32,8 @@ namespace Hanzo.VFX
         private int isDashingHash;
         private bool lastDashingState = false;
         private Coroutine emitCoroutine;
+
+        // [SerializeField]private CinemachineVirtualCamera vcam;
 
         void Awake()
         {
@@ -136,6 +140,9 @@ namespace Hanzo.VFX
 
         private IEnumerator DisableWhenDone(GameObject go, ParticleSystem[] systems)
         {
+            // vcam = GetComponent<PlayerMovementController>().GetCam();
+            // vcam.m_Lens.FieldOfView = 35f;
+
             float maxLifetime = 0f;
             foreach (var ps in systems)
             {

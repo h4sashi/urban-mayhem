@@ -196,6 +196,11 @@ namespace Hanzo.Player.Controllers
             }
         }
 
+        public CinemachineVirtualCamera GetCam()
+        {
+            return virtualCamera;
+        }
+
         private void Update()
         {
             if (!photonView.IsMine) return;

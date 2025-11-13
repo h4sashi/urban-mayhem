@@ -1,0 +1,26 @@
+﻿<Solution>
+  <Project Path="ToonyColorsPro.Demo.Editor.csproj" />
+  <Project Path="PhotonUnityNetworking.Demos.csproj" />
+  <Project Path="PhotonUnityNetworking.Editor.csproj" />
+  <Project Path="MK.Toon.Editor.csproj" />
+  <Project Path="PhotonUnityNetworking.Utilities.csproj" />
+  <Project Path="PhotonUnityNetworking.Utilities.PhotonPlayer.Editor.csproj" />
+  <Project Path="PunDemos.DemoSlotcarEditor.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="MK.Toon.csproj" />
+  <Project Path="PhotonUnityNetworking.csproj" />
+  <Project Path="PhotonChat.csproj" />
+  <Project Path="CFXREditor.csproj" />
+  <Project Path="PhotonRealtime.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="CFXRDemo.csproj" />
+  <Project Path="MK.MKTextureChannelPacker.csproj" />
+  <Project Path="MK.MeshUtility.csproj" />
+  <Project Path="CFXRRuntime.csproj" />
+  <Project Path="PunDemos.DemoHubEditor.csproj" />
+  <Project Path="KinoBloom.Runtime.csproj" />
+  <Project Path="MK.RampCreator.csproj" />
+  <Project Path="MK.Toon.URP.Editor.csproj" />
+  <Project Path="PhotonUnityNetworking.Utilities.Culling.Editor.csproj" />
+  <Project Path="MK.Toon.URP.csproj" />
+</Solution>
