@@ -120,33 +120,6 @@ MonoBehaviour:
   shakeDuration: 1.5
   shakeIntensity: 0.3
   rotationShakeIntensity: 10
-  useEmissionForTimed: 1
-  emissionColor: {r: 1, g: 0, b: 0, a: 1}
-  maxEmissionIntensity: 2
-  emissionCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
 --- !u!114 &-4353571912212571646
 MonoBehaviour:
   m_ObjectHideFlags: 0

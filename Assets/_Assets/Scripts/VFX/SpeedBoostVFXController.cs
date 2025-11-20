@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using Photon.Pun; 
 
 namespace Hanzo.VFX
 {
@@ -63,9 +64,15 @@ namespace Hanzo.VFX
         private bool glowActive = false;
 
         public bool IsSpeedBoostVFXActive => vfxInstance != null && vfxInstance.activeInHierarchy;
+        private PhotonView photonView;
+
+
+
+
 
         private void Awake()
         {
+            photonView = GetComponent<PhotonView>();
             if (speedBoostVFXPrefab == null)
             {
                 Debug.LogError("SpeedBoostVFXController: speedBoostVFXPrefab is not assigned!");
@@ -119,6 +126,8 @@ namespace Hanzo.VFX
 
         private void Update()
         {
+            if (photonView == null || !photonView.IsMine) return;
+    
             if (animator == null)
                 return;
 

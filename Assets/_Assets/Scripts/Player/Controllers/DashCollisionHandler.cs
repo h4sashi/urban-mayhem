@@ -2,22 +2,26 @@ using UnityEngine;
 using Photon.Pun;
 using Hanzo.Player.Abilities;
 using Hanzo.Player.Core;
+using Hanzo.Core.Interfaces;
 
 namespace Hanzo.Player.Controllers
 {
     /// <summary>
     /// Handles collision detection during dash
-    /// Applies knockback to both players and destructible objects
-    /// IMPROVED VERSION with better debugging and reliability
+    /// Applies knockback and DAMAGE to both players and destructible objects
+    /// UPDATED VERSION with IDamageable integration
     /// </summary>
     [RequireComponent(typeof(PhotonView))]
-    public class DashCollisionHandler : MonoBehaviour
+    public class DashCollisionHandler : MonoBehaviour, IDamageDealer
     {
         [Header("Settings")]
         [SerializeField] private AbilitySettings abilitySettings;
         [SerializeField] private LayerMask playerLayer;
         [SerializeField] private LayerMask destructibleLayer;
         [SerializeField] private float stunDuration = 2f;
+        
+        [Header("Damage Settings")]
+        [SerializeField] private float dashDamage = 1f; // 1 hit per dash
         
         [Header("Detection")]
         [SerializeField] private float detectionRadius = 1.5f;
@@ -41,7 +45,6 @@ namespace Hanzo.Player.Controllers
         
         private PhotonView photonView;
         private PlayerAbilityController abilityController;
-
         public PlayerMovementController playerMovementController;
         private Rigidbody rb;
         private AudioSource audioSource;
@@ -80,90 +83,18 @@ namespace Hanzo.Player.Controllers
                 Debug.Log($"[{name}] ✅ DashCollisionHandler initialized successfully");
             }
             
-            // DETAILED LAYER DIAGNOSTICS
             DiagnoseLayerConfiguration();
         }
         
-        /// <summary>
-        /// Comprehensive layer configuration diagnostics
-        /// </summary>
         private void DiagnoseLayerConfiguration()
         {
             Debug.Log($"[{name}] ========== LAYER CONFIGURATION ==========");
-            
-            // Check this GameObject's layer
             Debug.Log($"[{name}] This GameObject Layer: {gameObject.layer} ({LayerMask.LayerToName(gameObject.layer)})");
-            
-            // Check player layer mask
             Debug.Log($"[{name}] Player Layer Mask Value: {playerLayer.value}");
+            
             if (playerLayer == 0)
             {
                 Debug.LogError($"[{name}] ⚠️ PlayerLayer is NOT SET! Collisions will not work!");
-            }
-            else
-            {
-                // Show which layers are included in the mask
-                for (int i = 0; i < 32; i++)
-                {
-                    if ((playerLayer.value & (1 << i)) != 0)
-                    {
-                        string layerName = LayerMask.LayerToName(i);
-                        Debug.Log($"[{name}]   → Player mask includes Layer {i}: '{layerName}' (Mask value: {1 << i})");
-                    }
-                }
-            }
-            
-            // Check destructible layer mask
-            Debug.Log($"[{name}] Destructible Layer Mask Value: {destructibleLayer.value}");
-            if (destructibleLayer == 0)
-            {
-                Debug.LogWarning($"[{name}] ⚠️ DestructibleLayer is NOT SET!");
-            }
-            else
-            {
-                for (int i = 0; i < 32; i++)
-                {
-                    if ((destructibleLayer.value & (1 << i)) != 0)
-                    {
-                        string layerName = LayerMask.LayerToName(i);
-                        Debug.Log($"[{name}]   → Destructible mask includes Layer {i}: '{layerName}' (Mask value: {1 << i})");
-                    }
-                }
-            }
-            
-            // Test detection in a 10 unit radius
-            Debug.Log($"[{name}] Scanning for nearby objects...");
-            Collider[] nearbyColliders = Physics.OverlapSphere(transform.position, 10f);
-            Debug.Log($"[{name}] Found {nearbyColliders.Length} total colliders nearby");
-            
-            int playerCount = 0;
-            int destructibleCount = 0;
-            
-            foreach (var col in nearbyColliders)
-            {
-                int objLayer = col.gameObject.layer;
-                string objLayerName = LayerMask.LayerToName(objLayer);
-                
-                // Check if this object would be detected by player mask
-                if ((playerLayer.value & (1 << objLayer)) != 0)
-                {
-                    playerCount++;
-                    Debug.Log($"[{name}]   ✅ WOULD DETECT (Player): {col.name} | Layer {objLayer} ({objLayerName})");
-                }
-                
-                // Check if this object would be detected by destructible mask
-                if ((destructibleLayer.value & (1 << objLayer)) != 0)
-                {
-                    destructibleCount++;
-                    Debug.Log($"[{name}]   ✅ WOULD DETECT (Destructible): {col.name} | Layer {objLayer} ({objLayerName})");
-                }
-            }
-            
-            Debug.Log($"[{name}] Summary: {playerCount} detectable players, {destructibleCount} detectable destructibles");
-            
-            if (playerCount == 0 && nearbyColliders.Length > 0)
-            {
-                Debug.LogError($"[{name}] ❌ NO PLAYERS DETECTABLE! Check that player objects are on the correct layer!");
             }
             
             Debug.Log($"[{name}] ==========================================");
@@ -173,7 +104,6 @@ namespace Hanzo.Player.Controllers
         {
             if (!photonView.IsMine) return;
             
-            // Check if dash is active
             bool isDashing = playerMovementController != null && 
                            playerMovementController.DashAbility != null && 
                            playerMovementController.DashAbility.IsActive;
@@ -182,7 +112,7 @@ namespace Hanzo.Player.Controllers
             {
                 framesSinceDashActive++;
                 
-                if (verboseLogging && framesSinceDashActive % 5 == 0) // Log every 5th frame to reduce spam
+                if (verboseLogging && framesSinceDashActive % 5 == 0)
                 {
                     Debug.Log($"[{name}] 🏃 Dash Active (Frame {framesSinceDashActive})");
                 }
@@ -205,31 +135,23 @@ namespace Hanzo.Player.Controllers
 
         private void CheckForPlayerCollisions()
         {
-            // Cooldown check
             if (Time.time - lastPlayerHitTime < HIT_COOLDOWN)
                 return;
             
-            // Calculate detection position
             Vector3 detectionPos = transform.position + transform.TransformDirection(detectionOffset);
             lastDetectionPos = detectionPos;
             
-            // Perform overlap sphere
             Collider[] hitColliders = Physics.OverlapSphere(detectionPos, detectionRadius, playerLayer);
             
-            // ALWAYS log when checking, even if nothing found (for debugging)
             if (verboseLogging)
             {
                 if (hitColliders.Length > 0)
                 {
                     Debug.Log($"[{name}] 🎯 Player collision check: Found {hitColliders.Length} colliders");
                 }
-                else
+                else if (framesSinceDashActive % 10 == 0)
                 {
-                    // Log every 10 frames to avoid spam
-                    if (framesSinceDashActive % 10 == 0)
-                    {
-                        Debug.Log($"[{name}] 🔍 Player collision check: No colliders found at {detectionPos}");
-                    }
+                    Debug.Log($"[{name}] 🔍 Player collision check: No colliders found at {detectionPos}");
                 }
             }
             
@@ -279,6 +201,17 @@ namespace Hanzo.Player.Controllers
                     continue;
                 }
                 
+                // ========== APPLY DAMAGE ==========
+                IDamageable targetDamageable = hitCollider.GetComponentInParent<IDamageable>();
+                if (targetDamageable != null)
+                {
+                    DealDamage(targetDamageable, dashDamage, DamageType.Dash);
+                }
+                else
+                {
+                    Debug.LogWarning($"[{name}] Player {hitCollider.name} has no IDamageable component!");
+                }
+                
                 // Calculate knockback direction
                 Vector3 knockbackDir = (hitCollider.transform.position - transform.position).normalized;
                 
@@ -295,7 +228,7 @@ namespace Hanzo.Player.Controllers
                     knockbackForce *= 1.5f;
                 }
                 
-                Debug.Log($"[{name}] 💥 HIT PLAYER {targetPhotonView.Owner.NickName}! Knockback: {knockbackForce}");
+                Debug.Log($"[{name}] 💥 HIT PLAYER {targetPhotonView.Owner.NickName}! Knockback: {knockbackForce}, Damage: {dashDamage}");
                 
                 // IMPORTANT: Call the RPC on the VICTIM's PhotonView
                 targetPhotonView.RPC("RPC_ReceiveKnockback", RpcTarget.All, 
@@ -319,30 +252,21 @@ namespace Hanzo.Player.Controllers
 
         private void CheckForDestructibleCollisions()
         {
-            // Cooldown check
             if (Time.time - lastDestructibleHitTime < HIT_COOLDOWN)
                 return;
             
-            // Calculate detection position
             Vector3 detectionPos = transform.position + transform.TransformDirection(detectionOffset);
             lastDetectionPos = detectionPos;
             
-            // Perform overlap sphere
             Collider[] hitColliders = Physics.OverlapSphere(detectionPos, detectionRadius, destructibleLayer);
             
             if (verboseLogging && hitColliders.Length > 0)
             {
-                Debug.Log($"[{name}] 📦 Destructible collision check: Found {hitColliders.Length} colliders");
+                // Debug.Log($"[{name}] 📦 Destructible collision check: Found {hitColliders.Length} colliders");
             }
             
             foreach (var hitCollider in hitColliders)
             {
-                if (verboseLogging)
-                {
-                    Debug.Log($"[{name}] → Checking destructible: {hitCollider.name} (Tag: {hitCollider.tag})");
-                }
-                
-                // Check if object has rigidbody
                 Rigidbody targetRb = hitCollider.GetComponent<Rigidbody>();
                 if (targetRb == null)
                 {
@@ -351,22 +275,17 @@ namespace Hanzo.Player.Controllers
                 
                 if (targetRb == null)
                 {
-                    Debug.LogWarning($"[{name}] Destructible object {hitCollider.name} has no Rigidbody!");
                     continue;
                 }
                 
-                // Calculate knockback direction
                 Vector3 knockbackDir = (hitCollider.transform.position - transform.position).normalized;
                 
-                // Calculate force
                 float knockbackForce = abilitySettings.KnockbackForce;
                 knockbackForce *= destructibleForceMultiplier;
                 
-                // Apply tag-based multiplier
                 float tagMultiplier = GetForceMultiplierForTag(hitCollider.tag);
                 knockbackForce *= tagMultiplier;
                 
-                // Stack bonus
                 if (playerMovementController.DashAbility.StackLevel >= 2)
                 {
                     knockbackForce *= 1.3f;
@@ -376,20 +295,17 @@ namespace Hanzo.Player.Controllers
                     knockbackForce *= 1.5f;
                 }
                 
-                // Apply force with upward component
                 Vector3 forceDirection = knockbackDir;
                 forceDirection.y = destructibleUpwardForce;
                 forceDirection.Normalize();
                 
                 Vector3 force = forceDirection * knockbackForce;
                 
-                // Apply force locally
                 targetRb.velocity = Vector3.zero;
                 targetRb.AddForce(force, ForceMode.Impulse);
                 
                 Debug.Log($"[{name}] 💥 HIT DESTRUCTIBLE {hitCollider.name}! Force: {knockbackForce}");
                 
-                // If object has PhotonView, sync across network
                 PhotonView targetPhotonView = hitCollider.GetComponentInParent<PhotonView>();
                 if (targetPhotonView != null)
                 {
@@ -397,10 +313,8 @@ namespace Hanzo.Player.Controllers
                         forceDirection, knockbackForce);
                 }
                 
-                // Spawn destructible hit VFX
                 SpawnHitEffect(hitCollider.transform.position, true);
                 
-                // Play destructible hit sound
                 if (destructibleHitSound != null)
                 {
                     audioSource.PlayOneShot(destructibleHitSound);
@@ -412,6 +326,23 @@ namespace Hanzo.Player.Controllers
                 
                 lastDestructibleHitTime = Time.time;
             }
+        }
+
+        // ========== IDamageDealer Implementation ==========
+        
+        public void DealDamage(IDamageable target, float damageAmount, DamageType damageType)
+        {
+            if (target == null) return;
+            
+            // Pass this GameObject as the damage source
+            target.TakeDamage(damageAmount, gameObject, damageType);
+            
+            Debug.Log($"[{name}] Dealt {damageAmount} {damageType} damage to {target}");
+        }
+        
+        public GameObject GetDamageSource()
+        {
+            return gameObject;
         }
 
         [PunRPC]
@@ -449,10 +380,6 @@ namespace Hanzo.Player.Controllers
                 Destroy(vfx, 2f);
                 Debug.Log($"[{vfx.name}] ✨ Spawned hit VFX at {position}");
             }
-            else
-            {
-                Debug.LogWarning($"[{name}] ⚠️ Hit VFX prefab is null!");
-            }
         }
 
         private float GetForceMultiplierForTag(string tag)
@@ -475,22 +402,14 @@ namespace Hanzo.Player.Controllers
             
             Vector3 detectionPos = transform.position + transform.TransformDirection(detectionOffset);
             
-            // Draw player detection sphere (red)
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(detectionPos, detectionRadius);
             
-            // Draw destructible detection sphere (yellow/orange)
             Gizmos.color = new Color(1f, 0.5f, 0f, 0.5f);
             Gizmos.DrawWireSphere(detectionPos, detectionRadius);
             
-            // Draw forward direction
             Gizmos.color = Color.blue;
             Gizmos.DrawLine(transform.position, detectionPos);
-            
-            // Draw label
-            #if UNITY_EDITOR
-            UnityEditor.Handles.Label(detectionPos, $"Detection\nRadius: {detectionRadius}");
-            #endif
         }
 
         private void OnDrawGizmosSelected()
@@ -502,7 +421,6 @@ namespace Hanzo.Player.Controllers
             Gizmos.color = Color.green;
             Gizmos.DrawLine(transform.position, detectionPos);
             
-            // Draw actual collision hits if dashing
             if (Application.isPlaying && framesSinceDashActive > 0)
             {
                 Gizmos.color = Color.yellow;
@@ -523,6 +441,7 @@ namespace Hanzo.Player.Controllers
             GUILayout.Label($"Player Layer: {playerLayer.value}");
             GUILayout.Label($"Destructible Layer: {destructibleLayer.value}");
             GUILayout.Label($"Detection Radius: {detectionRadius}");
+            GUILayout.Label($"Dash Damage: {dashDamage}");
             GUILayout.Label($"Last Player Hit: {Time.time - lastPlayerHitTime:F2}s ago");
             GUILayout.Label($"Last Destructible Hit: {Time.time - lastDestructibleHitTime:F2}s ago");
             

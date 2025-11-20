@@ -128,7 +128,7 @@ namespace Hanzo.Utilities
 
             if (uiCanvas == null)
             {
-                uiCanvas = FindObjectOfType<Canvas>();
+                // uiCanvas = FindObjectOfType<Canvas>();
 
                 if (uiCanvas == null)
                 {

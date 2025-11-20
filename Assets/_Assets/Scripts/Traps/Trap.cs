@@ -1,13 +1,13 @@
 using System.Collections;
 using UnityEngine;
+using Hanzo.Core.Interfaces;
 
 namespace Hanzo.Traps
 {
     public enum TrapType
     {
-        CollisionDetonation,   // Explodes on impact
-        TimedDetonation,       // Explodes after a delay with shaking
-        // Future: ProximityDetonation, RemoteTriggered, ChainReaction, etc.
+        CollisionDetonation, // Explodes on impact
+        TimedDetonation, // Explodes after a delay with shaking
     }
 
     public class Trap : MonoBehaviour
@@ -25,7 +25,7 @@ namespace Hanzo.Traps
         public float blastRadius = 10f;
         public float explosionForce = 500f;
         public float upwardModifier = 3f;
-        public float damage = 50f;
+        public float damage = 1f; // Changed to 1 hit per explosion
 
         [Header("Detonation")]
         public float dtSpeed = 10f;
@@ -37,7 +37,6 @@ namespace Hanzo.Traps
         public float shakeDuration = 1.5f;
         public float shakeIntensity = 0.3f;
         public float rotationShakeIntensity = 10f;
-        
 
         private Rigidbody rb;
         private bool hasDetonated = false;
@@ -50,8 +49,6 @@ namespace Hanzo.Traps
         void Start()
         {
             rb = GetComponent<Rigidbody>();
-            originalPosition = transform.localPosition;
-            originalRotation = transform.localRotation;
 
             // Auto-start if trap type is Timed
             if (trapType == TrapType.TimedDetonation)
@@ -62,13 +59,13 @@ namespace Hanzo.Traps
 
         void Update()
         {
-             if (trapType == TrapType.CollisionDetonation)
-    {
-        if (isPlayingVFX)
-            PlayVFX();
-        else
-            StopVFX();
-    }
+            if (trapType == TrapType.CollisionDetonation)
+            {
+                if (isPlayingVFX)
+                    PlayVFX();
+                else
+                    StopVFX();
+            }
         }
 
         public void SetTrapHandler(TrapHandler handler)
@@ -87,6 +84,7 @@ namespace Hanzo.Traps
         }
 
         public void PlayVFX() => vfx?.SetActive(true);
+
         public void StopVFX() => vfx?.SetActive(false);
 
         void OnCollisionEnter(Collision collision)
@@ -94,7 +92,6 @@ namespace Hanzo.Traps
             if (trapType == TrapType.CollisionDetonation && !hasDetonated && detonateOnCollision)
             {
                 Detonate();
-                // StartCoroutine(DetonateWithDelay());
             }
         }
 
@@ -117,13 +114,16 @@ namespace Hanzo.Traps
         IEnumerator ShakeEffect(float duration)
         {
             float elapsed = 0f;
+            originalPosition = transform.localPosition;
+            originalRotation = transform.localRotation;
 
             while (elapsed < duration)
             {
                 elapsed += Time.deltaTime;
 
                 // Random position/rotation shake (cartoony style)
-                transform.localPosition = originalPosition + Random.insideUnitSphere * shakeIntensity;
+                transform.localPosition =
+                    originalPosition + Random.insideUnitSphere * shakeIntensity;
                 transform.localRotation = Quaternion.Euler(
                     originalRotation.eulerAngles + Random.insideUnitSphere * rotationShakeIntensity
                 );
@@ -137,19 +137,20 @@ namespace Hanzo.Traps
         }
 
         public void ActivateTrap()
-{
-    if (hasDetonated) return;
-    
-    if (trapType == TrapType.TimedDetonation)
-    {
-        StartCoroutine(TimedDetonationRoutine());
-    }
-    // CollisionDetonation doesn't need manual start - it waits for collision
-}
+        {
+            if (hasDetonated)
+                return;
+
+            if (trapType == TrapType.TimedDetonation)
+            {
+                StartCoroutine(TimedDetonationRoutine());
+            }
+        }
 
         public void Detonate()
         {
-            if (hasDetonated) return;
+            if (hasDetonated)
+                return;
             hasDetonated = true;
 
             if (detonationImpactVFX != null)
@@ -170,7 +171,11 @@ namespace Hanzo.Traps
 
         void ApplyExplosionForce()
         {
-            Collider[] colliders = Physics.OverlapSphere(transform.position, blastRadius, affectedLayers);
+            Collider[] colliders = Physics.OverlapSphere(
+                transform.position,
+                blastRadius,
+                affectedLayers
+            );
 
             foreach (Collider col in colliders)
             {
@@ -182,16 +187,38 @@ namespace Hanzo.Traps
                 {
                     float distance = Vector3.Distance(transform.position, col.transform.position);
                     float forceMagnitude = explosionForce * (1 - (distance / blastRadius));
-                    targetRb.AddExplosionForce(forceMagnitude, transform.position, blastRadius, upwardModifier, ForceMode.Impulse);
+                    targetRb.AddExplosionForce(
+                        forceMagnitude,
+                        transform.position,
+                        blastRadius,
+                        upwardModifier,
+                        ForceMode.Impulse
+                    );
 
                     if (damageImpact != null)
-                        Instantiate(damageImpact, col.ClosestPoint(transform.position), Quaternion.identity);
+                        Instantiate(
+                            damageImpact,
+                            col.ClosestPoint(transform.position),
+                            Quaternion.identity
+                        );
 
+                    // ========== APPLY DAMAGE USING IDamageable ==========
                     IDamageable damageable = col.GetComponent<IDamageable>();
+                    if (damageable == null)
+                    {
+                        // Try parent if not on this collider
+                        damageable = col.GetComponentInParent<IDamageable>();
+                    }
+                    
                     if (damageable != null)
                     {
+                        // Scale damage with distance (farther = less damage)
                         float damageAmount = damage * (1 - (distance / blastRadius));
-                        damageable.TakeDamage(damageAmount);
+                        
+                        // Apply damage with explosion type
+                        damageable.TakeDamage(damageAmount, gameObject, DamageType.Explosion);
+                        
+                        Debug.Log($"[Trap] 💣 Dealt {damageAmount} explosion damage to {col.name}");
                     }
                 }
             }
@@ -203,17 +230,10 @@ namespace Hanzo.Traps
                 Detonate();
         }
 
-        
-
         void OnDrawGizmosSelected()
         {
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(transform.position, blastRadius);
         }
-    }
-
-    public interface IDamageable
-    {
-        void TakeDamage(float amount);
     }
 }

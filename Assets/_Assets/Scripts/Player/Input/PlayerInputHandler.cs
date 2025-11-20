@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using System;
 using Hanzo.UI;
+using Photon.Pun; // ADDED
 
 namespace Hanzo.Player.Input
 {
@@ -26,19 +27,16 @@ namespace Hanzo.Player.Input
         
         private bool isMobilePlatform;
         private bool shouldUseMobileControls;
+        private PhotonView photonView; // ADDED
         
         private void Awake()
         {
-            // Detect platform - FIXED: Now properly detects mobile vs desktop
-            // isMobilePlatform = Application.isMobilePlatform || 
-                            //    Application.platform == RuntimePlatform.Android || 
-                            //    Application.platform == RuntimePlatform.IPhonePlayer;
+            // CRITICAL: Get PhotonView to check if this is the local player
+            photonView = GetComponent<PhotonView>();
             
-            // Allow forcing mobile controls for testing in editor
+            // Detect platform
+            isMobilePlatform = true; // Your current setup for testing
             
-                isMobilePlatform = true;
-            
-
             inputActions = new PlayerInputActions();
             
             // Bind keyboard/gamepad input events
@@ -47,8 +45,16 @@ namespace Hanzo.Player.Input
             inputActions.Player.Dash.performed += OnDashPerformed;
             inputActions.Player.SpeedBoost.performed += OnSpeedBoostPerformed;
             
-            // Setup mobile controls
-            SetupMobileControls();
+            // Setup mobile controls ONLY for local player
+            if (photonView.IsMine)
+            {
+                SetupMobileControls();
+            }
+            else
+            {
+                // CRITICAL: Disable UI for remote players
+                DisableMobileControlsForRemotePlayer();
+            }
         }
         
         private void SetupMobileControls()
@@ -66,17 +72,40 @@ namespace Hanzo.Player.Input
                 mobileJoystick.OnJoystickMove += OnMobileJoystickMove;
                 mobileJoystick.OnJoystickReleased += OnMobileJoystickReleased;
                 
-                Debug.Log("Mobile controls enabled");
+                Debug.Log("[LOCAL PLAYER] Mobile controls enabled");
             }
             else
             {
-                Debug.Log("Keyboard/Gamepad controls enabled");
+                Debug.Log("[LOCAL PLAYER] Keyboard/Gamepad controls enabled");
             }
+        }
+        
+        // NEW METHOD: Disable UI for remote players
+        private void DisableMobileControlsForRemotePlayer()
+        {
+            if (mobileControlsUI != null)
+            {
+                mobileControlsUI.SetActive(false);
+                Debug.Log("[REMOTE PLAYER] Mobile controls disabled");
+            }
+            
+            // Unsubscribe from joystick if it was somehow connected
+            if (mobileJoystick != null)
+            {
+                mobileJoystick.OnJoystickMove -= OnMobileJoystickMove;
+                mobileJoystick.OnJoystickReleased -= OnMobileJoystickReleased;
+            }
+            
+            shouldUseMobileControls = false;
         }
         
         private void OnEnable()
         {
-            inputActions?.Enable();
+            // Only enable input for local player
+            if (photonView != null && photonView.IsMine)
+            {
+                inputActions?.Enable();
+            }
         }
         
         private void OnDisable()
@@ -97,6 +126,9 @@ namespace Hanzo.Player.Input
         
         private void Update()
         {
+            // CRITICAL: Only process input for local player
+            if (photonView == null || !photonView.IsMine) return;
+            
             // On mobile, continuously read joystick input
             if (shouldUseMobileControls && mobileJoystick != null && mobileJoystick.IsActive)
             {
@@ -106,10 +138,11 @@ namespace Hanzo.Player.Input
             }
         }
         
-        // Keyboard/Gamepad Input - FIXED: Now works on desktop platforms
+        // Keyboard/Gamepad Input
         private void OnMovePerformed(InputAction.CallbackContext context)
         {
-            // Only ignore keyboard input if we're actually using mobile controls
+            // Guard: Only for local player
+            if (photonView == null || !photonView.IsMine) return;
             if (shouldUseMobileControls) return;
             
             Vector2 input = context.ReadValue<Vector2>();
@@ -119,6 +152,7 @@ namespace Hanzo.Player.Input
         
         private void OnMoveCanceled(InputAction.CallbackContext context)
         {
+            if (photonView == null || !photonView.IsMine) return;
             if (shouldUseMobileControls) return;
             
             MoveInput = Vector2.zero;
@@ -128,25 +162,33 @@ namespace Hanzo.Player.Input
         // Mobile Joystick Input
         private void OnMobileJoystickMove(Vector2 input)
         {
+            if (photonView == null || !photonView.IsMine) return;
+            
             MoveInput = input.magnitude > inputDeadzone ? input : Vector2.zero;
             OnMoveInput?.Invoke(MoveInput);
         }
         
         private void OnMobileJoystickReleased()
         {
+            if (photonView == null || !photonView.IsMine) return;
+            
             MoveInput = Vector2.zero;
             OnMoveInput?.Invoke(MoveInput);
         }
         
-        // Ability inputs - Work for both keyboard and mobile button presses
+        // Ability inputs
         private void OnDashPerformed(InputAction.CallbackContext context)
         {
+            if (photonView == null || !photonView.IsMine) return;
+            
             Debug.Log("Dash input received (Keyboard/Gamepad)");
             OnDashInput?.Invoke();
         }
         
         private void OnSpeedBoostPerformed(InputAction.CallbackContext context)
         {
+            if (photonView == null || !photonView.IsMine) return;
+            
             Debug.Log("Speed Boost input received (Keyboard/Gamepad)");
             OnSpeedBoostInput?.Invoke();
         }
@@ -154,25 +196,29 @@ namespace Hanzo.Player.Input
         // Public methods to trigger abilities from mobile UI buttons
         public void TriggerDash()
         {
+            if (photonView == null || !photonView.IsMine) return;
+            
             Debug.Log("Dash Triggered (Mobile Button)");
             OnDashInput?.Invoke();
         }
         
         public void TriggerSpeedBoost()
         {
+            if (photonView == null || !photonView.IsMine) return;
+            
             Debug.Log("Speed Boost Triggered (Mobile Button)");
             OnSpeedBoostInput?.Invoke();
         }
         
-        // Helper to check if using mobile controls
         public bool IsUsingMobileControls()
         {
             return shouldUseMobileControls;
         }
         
-        // Runtime control switching (optional feature)
         public void SwitchToMobileControls(bool enable)
         {
+            if (photonView == null || !photonView.IsMine) return;
+            
             useMobileControls = enable;
             SetupMobileControls();
         }

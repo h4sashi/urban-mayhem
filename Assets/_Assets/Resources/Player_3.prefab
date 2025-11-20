@@ -658,7 +658,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &8017405241449670581
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2630,7 +2630,6 @@ GameObject:
   - component: {fileID: 5434676102517538540}
   - component: {fileID: 7436400690146652464}
   - component: {fileID: 3647845272126381203}
-  - component: {fileID: 6113950811582600900}
   - component: {fileID: 8482756720461373099}
   - component: {fileID: 3675924095626907759}
   - component: {fileID: 494632994232701280}
@@ -2644,6 +2643,8 @@ GameObject:
   - component: {fileID: 5397965458493710677}
   - component: {fileID: 2249249050560392546}
   - component: {fileID: 3388513226085770351}
+  - component: {fileID: 7360563266481068044}
+  - component: {fileID: -1303944110897493389}
   m_Layer: 6
   m_Name: Player_3
   m_TagString: Player
@@ -2767,33 +2768,6 @@ MonoBehaviour:
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0
---- !u!54 &6113950811582600900
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5229929404236885346}
-  serializedVersion: 4
-  m_Mass: 1
-  m_Drag: 0
-  m_AngularDrag: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 0
-  m_Interpolate: 0
-  m_Constraints: 112
-  m_CollisionDetection: 0
 --- !u!114 &8482756720461373099
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2807,7 +2781,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inputDeadzone: 0.1
-  useMobileControls: 0
+  useMobileControls: 1
   mobileJoystick: {fileID: 4753393381974030272}
   mobileControlsUI: {fileID: 5501291232339902206}
 --- !u!114 &3675924095626907759
@@ -2827,7 +2801,7 @@ MonoBehaviour:
   virtualCamera: {fileID: 0}
   cameraFollowTarget: {fileID: 7583561636982298817}
   cameraLookAtTarget: {fileID: 2619719941312669904}
-  useCameraRelativeMovement: 0
+  useCameraRelativeMovement: 1
   showDebugInfo: 0
 --- !u!136 &494632994232701280
 CapsuleCollider:
@@ -2900,7 +2874,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stunDuration: 9
   knockbackDrag: 8
-  showDebugInfo: 1
+  showDebugInfo: 0
 --- !u!114 &5666055290258882945
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2939,6 +2913,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   stunDuration: 4
+  dashDamage: 1
   detectionRadius: 2.45
   detectionOffset: {x: 0, y: 1.17, z: 0.5}
   destructibleForceMultiplier: 1.2
@@ -3183,6 +3158,52 @@ MonoBehaviour:
   pulseAmount: 0.15
   useRadialGradient: 1
   vignetteSoftness: 0.19
+--- !u!54 &7360563266481068044
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5229929404236885346}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 112
+  m_CollisionDetection: 0
+--- !u!114 &-1303944110897493389
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5229929404236885346}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26371329d86c04a65bc1ad01d419e2ec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxHealth: 8
+  currentHealth: 8
+  respawnDelay: 3
+  respawnPosition: {x: 19.5, y: -10.78, z: -17.1}
+  dashDamage: 2
+  explosionDamage: 3
+  showDebugInfo: 1
 --- !u!1 &5330755340973429220
 GameObject:
   m_ObjectHideFlags: 0
@@ -4626,7 +4647,7 @@ MonoBehaviour:
     FieldOfView: 60
     OrthographicSize: 5
     NearClipPlane: 0.3
-    FarClipPlane: 1000
+    FarClipPlane: 250
     Dutch: 0
     ModeOverride: 0
     LensShift: {x: 0, y: 0}

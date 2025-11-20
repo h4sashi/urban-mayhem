@@ -13,6 +13,8 @@ GameObject:
   - component: {fileID: 4538807244825216829}
   - component: {fileID: 1329198079444089641}
   - component: {fileID: 3992183870825283818}
+  - component: {fileID: 2399139767329454154}
+  - component: {fileID: -9073146212689420527}
   m_Layer: 0
   m_Name: SM_Prop_Barrel_02 (1)
   m_TagString: Untagged
@@ -140,6 +142,45 @@ MonoBehaviour:
   shakeDuration: 1.5
   shakeIntensity: 0.09
   rotationShakeIntensity: 5
+--- !u!114 &2399139767329454154
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4691922437809665242}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 627855c7f81362d41938ffe0b1475957, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_SynchronizePosition: 1
+  m_SynchronizeRotation: 1
+  m_SynchronizeScale: 0
+  m_UseLocal: 1
+--- !u!114 &-9073146212689420527
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4691922437809665242}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa584fbee541324448dd18d8409c7a41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ObservedComponentsFoldoutOpen: 1
+  Group: 0
+  prefixField: -1
+  Synchronization: 3
+  OwnershipTransfer: 0
+  observableSearch: 2
+  ObservedComponents:
+  - {fileID: 2399139767329454154}
+  sceneViewId: 0
+  InstantiationId: 0
+  isRuntimeInstantiated: 0
 --- !u!1001 &226964385740686773
 PrefabInstance:
   m_ObjectHideFlags: 0

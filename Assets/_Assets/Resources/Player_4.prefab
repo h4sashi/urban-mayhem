@@ -1160,7 +1160,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &1621398392506459765
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1847,7 +1847,6 @@ GameObject:
   - component: {fileID: 601987204742289925}
   - component: {fileID: 7753765420805551307}
   - component: {fileID: 8634643405623261216}
-  - component: {fileID: 7400924486712170922}
   - component: {fileID: 840914440463902871}
   - component: {fileID: 2471694727157072360}
   - component: {fileID: 7683848129637499578}
@@ -1861,6 +1860,8 @@ GameObject:
   - component: {fileID: 8138563188336966344}
   - component: {fileID: 1788721032963024175}
   - component: {fileID: 1434903915404301901}
+  - component: {fileID: 3284894894430251454}
+  - component: {fileID: -4789290840028588720}
   m_Layer: 6
   m_Name: Player_4
   m_TagString: Player
@@ -1919,7 +1920,7 @@ Animator:
   m_Enabled: 1
   m_Avatar: {fileID: 9000000, guid: 21e1340f0ec98c849822321ff3df8758, type: 3}
   m_Controller: {fileID: 9100000, guid: c2c73a73fe485428faf9f3c976707d6e, type: 2}
-  m_CullingMode: 1
+  m_CullingMode: 2
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
   m_LinearVelocityBlending: 0
@@ -1984,33 +1985,6 @@ MonoBehaviour:
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0
---- !u!54 &7400924486712170922
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3440846199098326780}
-  serializedVersion: 4
-  m_Mass: 1
-  m_Drag: 0
-  m_AngularDrag: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 0
-  m_Interpolate: 0
-  m_Constraints: 112
-  m_CollisionDetection: 0
 --- !u!114 &840914440463902871
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2024,7 +1998,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inputDeadzone: 0.1
-  useMobileControls: 0
+  useMobileControls: 1
   mobileJoystick: {fileID: 1206171999774957095}
   mobileControlsUI: {fileID: 4615656103863142600}
 --- !u!114 &2471694727157072360
@@ -2044,7 +2018,7 @@ MonoBehaviour:
   virtualCamera: {fileID: 0}
   cameraFollowTarget: {fileID: 5093165476566827169}
   cameraLookAtTarget: {fileID: 3784881543488581270}
-  useCameraRelativeMovement: 0
+  useCameraRelativeMovement: 1
   showDebugInfo: 0
 --- !u!136 &7683848129637499578
 CapsuleCollider:
@@ -2117,7 +2091,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stunDuration: 9
   knockbackDrag: 8
-  showDebugInfo: 1
+  showDebugInfo: 0
 --- !u!114 &773468116705612632
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2156,6 +2130,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   stunDuration: 4
+  dashDamage: 1
   detectionRadius: 2.45
   detectionOffset: {x: 0, y: 1.17, z: 0.5}
   destructibleForceMultiplier: 1.2
@@ -2400,6 +2375,52 @@ MonoBehaviour:
   pulseAmount: 0.15
   useRadialGradient: 1
   vignetteSoftness: 0.19
+--- !u!54 &3284894894430251454
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3440846199098326780}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 112
+  m_CollisionDetection: 0
+--- !u!114 &-4789290840028588720
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3440846199098326780}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26371329d86c04a65bc1ad01d419e2ec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxHealth: 8
+  currentHealth: 8
+  respawnDelay: 3
+  respawnPosition: {x: 19.5, y: -10.78, z: -17.1}
+  dashDamage: 2
+  explosionDamage: 3
+  showDebugInfo: 1
 --- !u!1 &3587066732121583303
 GameObject:
   m_ObjectHideFlags: 0
@@ -5640,7 +5661,7 @@ MonoBehaviour:
     FieldOfView: 60
     OrthographicSize: 5
     NearClipPlane: 0.3
-    FarClipPlane: 1000
+    FarClipPlane: 250
     Dutch: 0
     ModeOverride: 0
     LensShift: {x: 0, y: 0}

@@ -1,6 +1,6 @@
+using Photon.Pun;
 using UnityEngine;
 using UnityEngine.AI;
-using Photon.Pun;
 
 namespace Hanzo.Networking.Utils
 {
@@ -10,16 +10,16 @@ namespace Hanzo.Networking.Utils
         public GameObject[] playerPrefab; // put prefab in Assets/Resources/
 
         [Header("Spawn area")]
-        public float spawnRadius = 20f;           // radius around this GameObject to search for spawn positions
-        public LayerMask obstacleMask;            // layers considered as obstacles (players, props) when checking overlap
-        public float clearRadius = 1.0f;          // how much empty space is required around spawn point
-        public int maxAttempts = 30;              // how many random tries before fallback
+        public float spawnRadius = 20f; // radius around this GameObject to search for spawn positions
+        public LayerMask obstacleMask; // layers considered as obstacles (players, props) when checking overlap
+        public float clearRadius = 2.0f; // how much empty space is required around spawn point
+        public int maxAttempts = 30; // how many random tries before fallback
 
         [Header("NavMesh")]
-        public float navSampleDistance = 2f;      // how far to search to snap to navmesh
+        public float navSampleDistance = 2f; // how far to search to snap to navmesh
 
         [Header("Options")]
-        public bool spawnOnJoinedRoom = true;     // automatically spawn when joining room
+        public bool spawnOnJoinedRoom = true; // automatically spawn when joining room
         public bool spawnAtTransformIfFail = true; // use this transform position if no valid spot found
 
         // Start is called before the first frame update
@@ -66,20 +66,77 @@ namespace Hanzo.Networking.Utils
                 if (spawnAtTransformIfFail)
                 {
                     spawnPos = transform.position;
-                    Debug.LogWarning("[Spawner] No valid random spawn found. Falling back to spawner transform position.");
+                    spawnPos.y += 3.0f; // small offset
+                    Debug.LogWarning(
+                        "[Spawner] No valid random spawn found. Falling back to spawner transform position."
+                    );
                 }
                 else
                 {
-                    Debug.LogError("[Spawner] No valid spawn found and fallback disabled. Aborting spawn.");
+                    Debug.LogError(
+                        "[Spawner] No valid spawn found and fallback disabled. Aborting spawn."
+                    );
                     return;
                 }
             }
 
-            // Instantiate via Photon (prefab path relative to Resources folder)
             int prefabIndex = Random.Range(0, playerPrefab.Length);
             string resourceName = playerPrefab[prefabIndex].gameObject.name;
-            GameObject player = PhotonNetwork.Instantiate(resourceName, spawnPos, Quaternion.identity, 0);
+            GameObject player = PhotonNetwork.Instantiate(
+                resourceName,
+                spawnPos,
+                Quaternion.identity,
+                0
+            );
+
+            
+
+            // Fix position immediately after spawn
+            StartCoroutine(StabilizePlayerPosition(player, spawnPos));
+
             Debug.Log("[Spawner] Spawned player at " + spawnPos);
+        }
+
+        private System.Collections.IEnumerator StabilizePlayerPosition(
+            GameObject player,
+            Vector3 targetPos
+        )
+        {
+            // Wait for one frame to let Photon initialize
+            yield return null;
+
+            // Disable physics temporarily
+            Rigidbody rb = player.GetComponent<Rigidbody>();
+            CharacterController cc = player.GetComponent<CharacterController>();
+
+            if (rb != null)
+            {
+                rb.isKinematic = true;
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+
+            if (cc != null)
+            {
+                cc.enabled = false;
+            }
+
+            // Force position
+            player.transform.position = targetPos;
+
+            // Wait another frame
+            yield return null;
+
+            // Re-enable physics
+            if (rb != null)
+            {
+                rb.isKinematic = false;
+            }
+
+            if (cc != null)
+            {
+                cc.enabled = true;
+            }
         }
 
         /// <summary>
@@ -90,29 +147,30 @@ namespace Hanzo.Networking.Utils
         {
             for (int i = 0; i < maxAttempts; i++)
             {
-                // random point in circle on XZ plane
                 Vector2 circle = Random.insideUnitCircle * spawnRadius;
                 Vector3 candidate = transform.position + new Vector3(circle.x, 0f, circle.y);
 
-                // sample navmesh to snap candidate to nav surface (if close enough)
                 NavMeshHit navHit;
-                if (NavMesh.SamplePosition(candidate, out navHit, navSampleDistance, NavMesh.AllAreas))
+                if (
+                    NavMesh.SamplePosition(
+                        candidate,
+                        out navHit,
+                        navSampleDistance,
+                        NavMesh.AllAreas
+                    )
+                )
                 {
-                    Vector3 navPoint = navHit.position;
+                    Vector3 navPoint = navHit.position + Vector3.up * 0.5f; // Add small offset
 
-                    // check overlap - ensure no obstacles within clearRadius
                     Collider[] hits = Physics.OverlapSphere(navPoint, clearRadius, obstacleMask);
                     if (hits.Length == 0)
                     {
                         result = navPoint;
                         return true;
                     }
-                    // else there's something too close; try again
                 }
-                // else candidate wasn't on navmesh; try again
             }
 
-            // nothing found
             result = Vector3.zero;
             return false;
         }

@@ -52,6 +52,9 @@ MonoBehaviour:
   - RPC_PlaySpeedBoostVisuals
   - RPC_ShowBoostVFX
   - RPC_StopSpeedBoostVisuals
+  - RPC_SyncDeathState
+  - RPC_SyncHealthUpdate
+  - RPC_SyncRespawn
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

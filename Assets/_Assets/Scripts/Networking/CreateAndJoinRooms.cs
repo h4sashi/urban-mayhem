@@ -1,8 +1,8 @@
-using UnityEngine;
 using Photon.Pun;
 using Photon.Realtime;
-using UnityEngine.SceneManagement;
 using TMPro;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
 {
@@ -12,13 +12,18 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     public TextMeshProUGUI feedbackText;
 
     [Header("Options")]
-    [SerializeField] private byte maxPlayers = 2;
-    [SerializeField] private string gameVersion = "1.0";
+    [SerializeField]
+    private byte maxPlayers = 2;
+
+    [SerializeField]
+    private string gameVersion = "1.0";
 
     void Start()
     {
         // Basic safety: ensure Photon connected
+        PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "us"; // or "eu", "asia", etc.
         PhotonNetwork.GameVersion = gameVersion;
+
         PhotonNetwork.NickName = "Player" + Random.Range(1000, 9999);
         PhotonNetwork.AutomaticallySyncScene = true;
 
@@ -51,7 +56,12 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
             return;
         }
 
-        RoomOptions roomOptions = new RoomOptions { MaxPlayers = maxPlayers };
+        RoomOptions roomOptions = new RoomOptions
+        {
+            MaxPlayers = maxPlayers,
+            IsVisible = true,
+            IsOpen = true,
+        };
         Debug.Log($"[CreateAndJoinRooms] Creating room '{roomName}' (maxPlayers={maxPlayers})");
         feedbackText?.SetText($"Creating room '{roomName}'...");
         PhotonNetwork.CreateRoom(roomName, roomOptions, TypedLobby.Default);
@@ -86,7 +96,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
 
         // Load level for all players in the room (requires AutomaticallySyncScene true)
         Debug.Log("[CreateAndJoinRooms] Loading Main scene...");
-        PhotonNetwork.LoadLevel("Main 2");  // ensure "Main" exists in Build Settings
+        PhotonNetwork.LoadLevel("Main 2"); // ensure "Main" exists in Build Settings
     }
 
     // Called when CreateRoom fails
