@@ -5,8 +5,8 @@
   <Project Path="MK.Toon.Editor.csproj" />
   <Project Path="PhotonUnityNetworking.Utilities.csproj" />
   <Project Path="PhotonUnityNetworking.Utilities.PhotonPlayer.Editor.csproj" />
-  <Project Path="PunDemos.DemoSlotcarEditor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="PunDemos.DemoSlotcarEditor.csproj" />
   <Project Path="MK.Toon.csproj" />
   <Project Path="PhotonUnityNetworking.csproj" />
   <Project Path="PhotonChat.csproj" />

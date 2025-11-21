@@ -1,6 +1,6 @@
 using System.Collections;
-using UnityEngine;
 using Hanzo.Core.Interfaces;
+using UnityEngine;
 
 namespace Hanzo.Traps
 {
@@ -169,6 +169,9 @@ namespace Hanzo.Traps
                 Destroy(gameObject);
         }
 
+        //    float distance = Vector3.Distance(transform.position, col.transform.position);
+        //             float forceMagnitude = explosionForce * (1 - (distance / blastRadius));
+
         void ApplyExplosionForce()
         {
             Collider[] colliders = Physics.OverlapSphere(
@@ -183,10 +186,11 @@ namespace Hanzo.Traps
                     continue;
 
                 Rigidbody targetRb = col.GetComponent<Rigidbody>();
+                float distance = Vector3.Distance(transform.position, col.transform.position);
+                float forceMagnitude = explosionForce * (1 - (distance / blastRadius));
+
                 if (targetRb != null)
                 {
-                    float distance = Vector3.Distance(transform.position, col.transform.position);
-                    float forceMagnitude = explosionForce * (1 - (distance / blastRadius));
                     targetRb.AddExplosionForce(
                         forceMagnitude,
                         transform.position,
@@ -201,25 +205,28 @@ namespace Hanzo.Traps
                             col.ClosestPoint(transform.position),
                             Quaternion.identity
                         );
+                }
 
-                    // ========== APPLY DAMAGE USING IDamageable ==========
-                    IDamageable damageable = col.GetComponent<IDamageable>();
-                    if (damageable == null)
-                    {
-                        // Try parent if not on this collider
-                        damageable = col.GetComponentInParent<IDamageable>();
-                    }
-                    
-                    if (damageable != null)
-                    {
-                        // Scale damage with distance (farther = less damage)
-                        float damageAmount = damage * (1 - (distance / blastRadius));
-                        
-                        // Apply damage with explosion type
-                        damageable.TakeDamage(damageAmount, gameObject, DamageType.Explosion);
-                        
-                        Debug.Log($"[Trap] 💣 Dealt {damageAmount} explosion damage to {col.name}");
-                    }
+                // ========== APPLY DAMAGE USING IDamageable ==========
+                IDamageable damageable = col.GetComponent<IDamageable>();
+                if (damageable == null)
+                {
+                    // Try parent if not on this collider
+                    damageable = col.GetComponentInParent<IDamageable>();
+                }
+
+                if (damageable != null)
+                {
+                    // Scale damage with distance (farther = less damage)
+                    float damageAmount = damage * (1 - (distance / blastRadius));
+
+                    // Ensure minimum damage
+                    damageAmount = Mathf.Max(0.5f, damageAmount);
+
+                    // Apply damage with explosion type - SCORE IS HANDLED IN PlayerHealthComponent
+                    damageable.TakeDamage(damageAmount, gameObject, DamageType.Explosion);
+
+                    Debug.Log($"[Trap] 💣 Dealt {damageAmount} explosion damage to {col.name}");
                 }
             }
         }

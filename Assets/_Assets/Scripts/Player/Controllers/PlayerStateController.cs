@@ -1,13 +1,13 @@
-
 using UnityEngine;
 using Photon.Pun;
 using System.Collections;
 using Hanzo.VFX;
+using Hanzo.Player.Core;
 
 namespace Hanzo.Player.Controllers
 {
     /// <summary>
-    /// Manages player state including stun, knockback, and recovery
+    /// Manages player state including stun, knockback, falling, and recovery
     /// Works with StunVFXController for synchronized visual effects
     /// </summary>
     [RequireComponent(typeof(PhotonView))]
@@ -18,12 +18,28 @@ namespace Hanzo.Player.Controllers
         [SerializeField] private float stunDuration = 2f;
         [SerializeField] private float knockbackDrag = 8f;
         
+        [Header("Falling Settings")]
+        [SerializeField] private MovementSettings movementSettings;
+        [SerializeField] private float fallThreshold = 0.5f;
+        [SerializeField] private float fallCheckInterval = 0.1f;
+        [SerializeField] private float groundCheckDistance = 0.3f;
+        [SerializeField] private LayerMask groundLayer = ~0;
+        
+        [Header("Fall Damage (Optional)")]
+        [SerializeField] private bool enableFallDamage = false;
+        [SerializeField] private float fallDamageThreshold = 5f;
+        [SerializeField] private float fallDamageMultiplier = 10f;
+        
         [Header("Debug")]
         [SerializeField] private bool showDebugInfo = false;
         
         // State
         private bool isStunned = false;
+        private bool isFalling = false;
+        private bool isGrounded = true;
         private float stunTimer = 0f;
+        private float lastFallCheck = 0f;
+        private float fallStartHeight = 0f;
         private Coroutine stunCoroutine;
         
         // Components
@@ -35,15 +51,21 @@ namespace Hanzo.Player.Controllers
         // Animation parameter hashes
         private static readonly int StunnedHash = Animator.StringToHash("STUNNED");
         private static readonly int GetUpHash = Animator.StringToHash("GETUP");
+        private static readonly int FallingHash = Animator.StringToHash("FALLING");
+        private static readonly int GroundedHash = Animator.StringToHash("GROUNDED");
         
         // Properties
         public bool IsStunned => isStunned;
+        public bool IsFalling => isFalling;
+        public bool IsGrounded => isGrounded;
         public float StunTimeRemaining => stunTimer;
         
         // Events
         public event System.Action OnStunStarted;
         public event System.Action OnStunEnded;
         public event System.Action<Vector3, float> OnKnockbackReceived;
+        public event System.Action OnFallStarted;
+        public event System.Action<float> OnLanded; // Passes fall distance
 
         private void Awake()
         {
@@ -54,13 +76,139 @@ namespace Hanzo.Player.Controllers
             
             if (animator == null)
             {
-                Debug.LogWarning("PlayerStateController: No Animator found. Stun animations will not play.");
+                Debug.LogWarning("PlayerStateController: No Animator found. Animations will not play.");
             }
             
             if (vfxController == null)
             {
                 Debug.LogError("PlayerStateController: StunVFXController component is missing!");
             }
+            
+            // Initialize grounded state
+            UpdateGroundedState();
+        }
+
+        private void Update()
+        {
+            if (!photonView.IsMine) return;
+            
+            // Periodically check for falling (only if not stunned)
+            if (!isStunned && Time.time - lastFallCheck > fallCheckInterval)
+            {
+                lastFallCheck = Time.time;
+                CheckForFalling();
+            }
+        }
+
+        /// <summary>
+        /// Checks if player should enter falling state
+        /// </summary>
+        private void CheckForFalling()
+        {
+            bool wasGrounded = isGrounded;
+            UpdateGroundedState();
+            
+            // Enter falling state if not grounded and moving downward
+            if (!isGrounded && !isFalling && rb.velocity.y < -0.5f)
+            {
+                EnterFallingState();
+            }
+            // Exit falling state if grounded
+            else if (isGrounded && isFalling)
+            {
+                ExitFallingState();
+            }
+            
+            // Update animator grounded state
+            if (animator != null && wasGrounded != isGrounded)
+            {
+                animator.SetBool(GroundedHash, isGrounded);
+            }
+        }
+
+        /// <summary>
+        /// Updates grounded state using raycast
+        /// </summary>
+        private void UpdateGroundedState()
+        {
+            Vector3 origin = transform.position + Vector3.up * 0.1f;
+            
+            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, groundCheckDistance, groundLayer))
+            {
+                // Additional check: make sure vertical velocity is near zero or downward
+                isGrounded = rb.velocity.y <= 0.1f;
+            }
+            else
+            {
+                isGrounded = false;
+            }
+        }
+
+        /// <summary>
+        /// Enter falling state
+        /// </summary>
+        private void EnterFallingState()
+        {
+            isFalling = true;
+            fallStartHeight = transform.position.y;
+            
+            // Reduce drag for realistic falling
+            rb.drag = 0.5f;
+            
+            // Set falling animation
+            if (animator != null)
+            {
+                animator.SetBool(FallingHash, true);
+                animator.SetBool(GroundedHash, false);
+            }
+            
+            OnFallStarted?.Invoke();
+            
+            Debug.Log($"[Falling] Started at height: {fallStartHeight:F2}m");
+            
+            // Sync to other clients
+            photonView.RPC("RPC_SyncFallingState", RpcTarget.OthersBuffered, true);
+        }
+
+        /// <summary>
+        /// Exit falling state and handle landing
+        /// </summary>
+        private void ExitFallingState()
+        {
+            float fallDistance = fallStartHeight - transform.position.y;
+            isFalling = false;
+            
+            // Reset falling animation
+            if (animator != null)
+            {
+                animator.SetBool(FallingHash, false);
+                animator.SetBool(GroundedHash, true);
+            }
+            
+            // Restore normal drag (unless stunned)
+            if (!isStunned && movementSettings != null)
+            {
+                rb.drag = movementSettings.GroundDrag;
+            }
+            else if (!isStunned)
+            {
+                rb.drag = 6f; // Fallback value
+            }
+            
+            Debug.Log($"[Falling] Landed! Fall distance: {fallDistance:F2}m");
+            
+            // Apply fall damage if enabled
+            if (enableFallDamage && fallDistance > fallDamageThreshold)
+            {
+                float damage = (fallDistance - fallDamageThreshold) * fallDamageMultiplier;
+                Debug.Log($"[Fall Damage] {damage:F1} damage from {fallDistance:F2}m fall");
+                // TODO: Apply damage to player health system
+            }
+            
+            OnLanded?.Invoke(fallDistance);
+            
+            // Sync to other clients
+            photonView.RPC("RPC_SyncFallingState", RpcTarget.OthersBuffered, false);
         }
 
         /// <summary>
@@ -71,6 +219,16 @@ namespace Hanzo.Player.Controllers
             if (!photonView.IsMine) return;
             
             Debug.Log($"[LOCAL] ApplyKnockbackAndStun - Direction: {knockbackDirection}, Force: {knockbackForce}");
+            
+            // Exit falling state if currently falling
+            if (isFalling)
+            {
+                isFalling = false;
+                if (animator != null)
+                {
+                    animator.SetBool(FallingHash, false);
+                }
+            }
             
             // Apply knockback force
             if (rb != null)
@@ -177,7 +335,16 @@ namespace Hanzo.Player.Controllers
             // RECOVERY COMPLETE
             isStunned = false;
             stunTimer = 0f;
-            rb.drag = originalDrag;
+            
+            // Restore appropriate drag based on current state
+            if (movementSettings != null)
+            {
+                rb.drag = isGrounded ? movementSettings.GroundDrag : movementSettings.AirDrag;
+            }
+            else
+            {
+                rb.drag = originalDrag;
+            }
             
             // Turn off Get Up animation
             if (animator != null)
@@ -266,6 +433,19 @@ namespace Hanzo.Player.Controllers
             }
         }
         
+        [PunRPC]
+        private void RPC_SyncFallingState(bool falling)
+        {
+            // Sync falling animation for remote players
+            isFalling = falling;
+            
+            if (animator != null)
+            {
+                animator.SetBool(FallingHash, falling);
+                animator.SetBool(GroundedHash, !falling);
+            }
+        }
+        
         /// <summary>
         /// Handles animation states for remote players viewing the stunned player
         /// </summary>
@@ -311,18 +491,45 @@ namespace Hanzo.Player.Controllers
         {
             if (!showDebugInfo || !photonView.IsMine) return;
             
-            GUILayout.BeginArea(new Rect(10, 400, 300, 120));
+            GUILayout.BeginArea(new Rect(10, 400, 300, 160));
             GUILayout.Label("=== PLAYER STATE ===");
+            GUILayout.Label($"Grounded: {isGrounded}");
+            GUILayout.Label($"Falling: {isFalling}");
             GUILayout.Label($"Stunned: {isStunned}");
             if (isStunned)
             {
                 GUILayout.Label($"Recovery in: {stunTimer:F2}s");
+            }
+            if (isFalling)
+            {
+                float currentFallDistance = fallStartHeight - transform.position.y;
+                GUILayout.Label($"Fall Distance: {currentFallDistance:F2}m");
             }
             if (vfxController != null)
             {
                 GUILayout.Label($"VFX Active: {vfxController.IsStunVFXActive}");
             }
             GUILayout.EndArea();
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (!Application.isPlaying || !showDebugInfo) return;
+            
+            // Visualize ground check
+            Vector3 origin = transform.position + Vector3.up * 0.1f;
+            Gizmos.color = isGrounded ? Color.green : Color.red;
+            Gizmos.DrawLine(origin, origin + Vector3.down * groundCheckDistance);
+            
+            // Draw sphere at ground check point
+            Gizmos.DrawWireSphere(origin + Vector3.down * groundCheckDistance, 0.1f);
+            
+            // Show fall threshold check
+            if (!isGrounded)
+            {
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawLine(origin, origin + Vector3.down * fallThreshold);
+            }
         }
 
         private void OnDestroy()

@@ -132,7 +132,7 @@ MonoBehaviour:
   blastRadius: 13.85
   explosionForce: 44.8
   upwardModifier: 2.52
-  damage: 50
+  damage: 9
   dtSpeed: 10
   affectedLayers:
     serializedVersion: 2
