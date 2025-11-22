@@ -1,35 +1,52 @@
-using UnityEngine;
-using Hanzo.Core.Interfaces;
-using Hanzo.Player.Input;
-using Hanzo.Player.Abilities;
-using Hanzo.Player.Movement.States;
-using Hanzo.Player.Core;
-using Photon.Pun;
 using Cinemachine;
-using Unity.VisualScripting;
+using Hanzo.Core.Interfaces;
+using Hanzo.Player.Abilities;
+using Hanzo.Player.Core;
+using Hanzo.Player.Input;
+using Hanzo.Player.Movement.States;
+using Photon.Pun;
+using UnityEngine;
 
 namespace Hanzo.Player.Controllers
 {
-    /// <summary>
-    /// Main player movement controller with camera-relative input
-    /// </summary>
     [RequireComponent(typeof(PhotonView))]
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(PlayerInputHandler))]
     public class PlayerMovementController : MonoBehaviour, IMovementController
     {
         [Header("Settings")]
-        [SerializeField] private MovementSettings movementSettings;
-        [SerializeField] private AbilitySettings abilitySettings;
+        [SerializeField]
+        private MovementSettings movementSettings;
+
+        [SerializeField]
+        private AbilitySettings abilitySettings;
 
         [Header("Camera Settings")]
-        [SerializeField] private CinemachineVirtualCamera virtualCamera;
-        [SerializeField] private Transform cameraFollowTarget;
-        [SerializeField] private Transform cameraLookAtTarget;
-        [SerializeField] private bool useCameraRelativeMovement = true;
+        [SerializeField]
+        private CinemachineVirtualCamera virtualCamera;
+
+        [SerializeField]
+        private Transform cameraFollowTarget;
+
+        [SerializeField]
+        private Transform cameraLookAtTarget;
+
+        [SerializeField]
+        private bool useCameraRelativeMovement = true;
+
+        [Header("Ground Detection")]
+        [SerializeField]
+        private LayerMask groundLayer = ~0;
+
+        [SerializeField]
+        private float groundCheckDistance = 0.3f;
+
+        [SerializeField]
+        private float fallCheckInterval = 0.1f;
 
         [Header("Debug")]
-        [SerializeField] private bool showDebugInfo = false;
+        [SerializeField]
+        private bool showDebugInfo = false;
 
         // Components
         private Rigidbody rb;
@@ -43,6 +60,7 @@ namespace Hanzo.Player.Controllers
         private MovingState movingState;
         private IdleState idleState;
         private DashingState dashingState;
+        private FallingState fallingState;
         private IMovementState currentState;
 
         // Abilities
@@ -53,6 +71,9 @@ namespace Hanzo.Player.Controllers
         // Camera-relative input
         private Vector2 rawInput;
         private Vector3 cameraRelativeInput;
+
+        // Fall detection
+        private float lastFallCheck = 0f;
 
         // IMovementController Interface
         public Vector3 Position => transform.position;
@@ -69,7 +90,6 @@ namespace Hanzo.Player.Controllers
             inputHandler = GetComponent<PlayerInputHandler>();
             stateController = GetComponent<PlayerStateController>();
 
-            // Auto-find virtual camera if not assigned
             if (virtualCamera == null)
             {
                 virtualCamera = GetComponentInChildren<CinemachineVirtualCamera>(true);
@@ -94,17 +114,129 @@ namespace Hanzo.Player.Controllers
         {
             mainCamera = Camera.main;
 
-            // Setup camera only for local player
             if (photonView.IsMine)
             {
                 SetupVirtualCamera();
             }
             else
             {
-                // Disable camera for non-local players
                 if (virtualCamera != null)
                 {
                     virtualCamera.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        private void Update()
+        {
+            if (!photonView.IsMine)
+                return;
+
+            // Don't allow movement if stunned
+            if (stateController != null && stateController.IsStunned)
+            {
+                return;
+            }
+
+            // Convert raw input to camera-relative movement
+            if (useCameraRelativeMovement)
+            {
+                ProcessCameraRelativeInput();
+            }
+
+            // Update abilities
+            dashAbility?.Update();
+            speedBoostAbility?.Update();
+
+            // Check for falling state changes
+            if (Time.time - lastFallCheck > fallCheckInterval)
+            {
+                lastFallCheck = Time.time;
+                CheckForFalling();
+            }
+
+            // CRITICAL FIX: Always update current state
+            // Remove the condition that prevented updates during falling
+            currentState?.Update(this);
+
+            // Check for state transitions
+            CheckStateTransitions();
+        }
+
+        /// <summary>
+        /// SIMPLIFIED: Check falling state based ONLY on PlayerStateController
+        /// </summary>
+        private void CheckForFalling()
+        {
+            // Don't check for falling while dashing
+            if (currentState is DashingState)
+                return;
+
+            if (stateController == null)
+                return;
+
+            // ENTER FALLING: Controller says we're falling and we're not in FallingState
+            if (stateController.IsFalling && !(currentState is FallingState))
+            {
+                Debug.Log("[Movement] Entering FallingState");
+                ChangeState(fallingState);
+            }
+            // EXIT FALLING: Controller says we're grounded and we're in FallingState
+            else if (stateController.IsGrounded && !stateController.IsFalling && currentState is FallingState)
+            {
+                Debug.Log("[Movement] Landing detected - exiting FallingState");
+                
+                // SIMPLE: Just check current input to determine next state
+                if (rawInput.magnitude > 0.1f)
+                {
+                    Debug.Log("[Movement] Has input - transitioning to Moving");
+                    ChangeState(movingState);
+                }
+                else
+                {
+                    Debug.Log("[Movement] No input - transitioning to Idle");
+                    ChangeState(idleState);
+                }
+            }
+        }
+
+        private void CheckStateTransitions()
+        {
+            // CRITICAL FIX: Allow normal transitions even during falling
+            // The state itself will handle whether to apply movement
+            
+            // Dash can interrupt any state
+            if (dashAbility.IsActive && !(currentState is DashingState))
+            {
+                ChangeState(dashingState);
+                return;
+            }
+
+            // Exit dash state
+            if (!dashAbility.IsActive && currentState is DashingState)
+            {
+                if (rawInput.magnitude > 0.1f)
+                {
+                    ChangeState(movingState);
+                }
+                else
+                {
+                    ChangeState(idleState);
+                }
+                return;
+            }
+
+            // Normal idle/moving transitions (NOT blocked during falling)
+            // The MovingState will check if grounded before applying forces
+            if (!(currentState is DashingState) && !(currentState is FallingState))
+            {
+                if (rawInput.magnitude > 0.1f && currentState is IdleState)
+                {
+                    ChangeState(movingState);
+                }
+                else if (rawInput.magnitude <= 0.1f && currentState is MovingState)
+                {
+                    ChangeState(idleState);
                 }
             }
         }
@@ -113,11 +245,10 @@ namespace Hanzo.Player.Controllers
         {
             if (virtualCamera == null)
             {
-                Debug.LogWarning("PlayerMovementController: Virtual Camera not found as child! Camera setup skipped.");
+                Debug.LogWarning("PlayerMovementController: Virtual Camera not found!");
                 return;
             }
 
-            // Set Follow target
             if (cameraFollowTarget != null)
             {
                 virtualCamera.Follow = cameraFollowTarget;
@@ -125,10 +256,8 @@ namespace Hanzo.Player.Controllers
             else
             {
                 virtualCamera.Follow = transform;
-                Debug.LogWarning("PlayerMovementController: Camera Follow Target not assigned, using player transform.");
             }
 
-            // Set LookAt target
             if (cameraLookAtTarget != null)
             {
                 virtualCamera.LookAt = cameraLookAtTarget;
@@ -136,7 +265,6 @@ namespace Hanzo.Player.Controllers
             else
             {
                 virtualCamera.LookAt = transform;
-                Debug.LogWarning("PlayerMovementController: Camera LookAt Target not assigned, using player transform.");
             }
 
             Debug.Log($"Virtual Camera setup complete for local player: {photonView.ViewID}");
@@ -146,6 +274,7 @@ namespace Hanzo.Player.Controllers
         {
             movingState = new MovingState(movementSettings);
             idleState = new IdleState();
+            fallingState = new FallingState(groundLayer);
 
             currentState = idleState;
             currentState.Enter(this);
@@ -153,24 +282,21 @@ namespace Hanzo.Player.Controllers
 
         private void InitializeAbilities()
         {
-            // Initialize Dash Ability
             dashAbility = new DashAbility(abilitySettings);
             dashAbility.Initialize(this);
 
-            // Create dashing state with dash ability reference
             dashingState = new DashingState(dashAbility);
 
-            // Initialize Speed Boost Ability
             speedBoostAbility = new SpeedBoostAbility(abilitySettings);
             speedBoostAbility.Initialize(this);
 
-            // CRITICAL: Subscribe to speed multiplier changes
             speedBoostAbility.OnSpeedMultiplierChanged += OnSpeedBoostMultiplierChanged;
         }
 
         private void SubscribeToInput()
         {
-            if (inputHandler == null) return;
+            if (inputHandler == null)
+                return;
 
             inputHandler.OnMoveInput += HandleMoveInput;
             inputHandler.OnDashInput += HandleDashInput;
@@ -202,36 +328,6 @@ namespace Hanzo.Player.Controllers
             return virtualCamera;
         }
 
-        private void Update()
-        {
-            if (!photonView.IsMine) return;
-
-            // Don't allow movement if stunned
-            if (stateController != null && stateController.IsStunned)
-            {
-                return;
-            }
-
-            // Convert raw input to camera-relative movement
-            if (useCameraRelativeMovement)
-            {
-                ProcessCameraRelativeInput();
-            }
-
-            // Update abilities
-            dashAbility?.Update();
-            speedBoostAbility?.Update();
-
-            // Update current state
-            currentState?.Update(this);
-
-            // Check for state transitions
-            CheckStateTransitions();
-        }
-
-        /// <summary>
-        /// Converts joystick input to camera-relative direction
-        /// </summary>
         private void ProcessCameraRelativeInput()
         {
             if (mainCamera == null || rawInput.magnitude < 0.01f)
@@ -240,69 +336,37 @@ namespace Hanzo.Player.Controllers
                 return;
             }
 
-            // Get camera forward and right vectors
             Vector3 cameraForward = mainCamera.transform.forward;
             Vector3 cameraRight = mainCamera.transform.right;
 
-            // Flatten to horizontal plane (ignore Y)
             cameraForward.y = 0f;
             cameraRight.y = 0f;
             cameraForward.Normalize();
             cameraRight.Normalize();
 
-            // Calculate camera-relative movement direction
-            cameraRelativeInput = (cameraForward * rawInput.y + cameraRight * rawInput.x).normalized;
+            cameraRelativeInput = (
+                cameraForward * rawInput.y + cameraRight * rawInput.x
+            ).normalized;
 
-            // Pass to moving state as Vector2 (x, z)
             Vector2 processedInput = new Vector2(cameraRelativeInput.x, cameraRelativeInput.z);
             movingState?.SetMoveInput(processedInput);
         }
 
-        private void CheckStateTransitions()
+        private bool IsGrounded()
         {
-            // Priority: Dashing > Moving > Idle
-
-            // Check if we should enter dashing state
-            if (dashAbility.IsActive && !(currentState is DashingState))
-            {
-                ChangeState(dashingState);
-            }
-            // Check if we should exit dashing state
-            else if (!dashAbility.IsActive && currentState is DashingState)
-            {
-                // Return to moving if there's input, otherwise idle
-                if (rawInput.magnitude > 0.1f)
-                {
-                    ChangeState(movingState);
-                }
-                else
-                {
-                    ChangeState(idleState);
-                }
-            }
-            // Normal state transitions (not dashing)
-            else if (!(currentState is DashingState))
-            {
-                if (rawInput.magnitude > 0.1f && currentState is IdleState)
-                {
-                    ChangeState(movingState);
-                }
-                else if (rawInput.magnitude <= 0.1f && currentState is MovingState)
-                {
-                    ChangeState(idleState);
-                }
-            }
+            Vector3 origin = transform.position + Vector3.up * 0.1f;
+            return Physics.Raycast(origin, Vector3.down, groundCheckDistance, groundLayer);
         }
 
         private void HandleMoveInput(Vector2 input)
         {
-            if (!photonView.IsMine) return;
-            if (stateController != null && stateController.IsStunned) return;
+            if (!photonView.IsMine)
+                return;
+            if (stateController != null && stateController.IsStunned)
+                return;
 
-            // Store raw input
             rawInput = input;
 
-            // If not using camera-relative, pass directly to moving state
             if (!useCameraRelativeMovement)
             {
                 movingState?.SetMoveInput(input);
@@ -311,8 +375,10 @@ namespace Hanzo.Player.Controllers
 
         private void HandleDashInput()
         {
-            if (!photonView.IsMine) return;
-            if (stateController != null && stateController.IsStunned) return;
+            if (!photonView.IsMine)
+                return;
+            if (stateController != null && stateController.IsStunned)
+                return;
 
             if (dashAbility != null && dashAbility.TryActivate())
             {
@@ -322,8 +388,10 @@ namespace Hanzo.Player.Controllers
 
         private void HandleSpeedBoostInput()
         {
-            if (!photonView.IsMine) return;
-            if (stateController != null && stateController.IsStunned) return;
+            if (!photonView.IsMine)
+                return;
+            if (stateController != null && stateController.IsStunned)
+                return;
 
             if (speedBoostAbility != null && speedBoostAbility.TryActivate())
             {
@@ -331,12 +399,8 @@ namespace Hanzo.Player.Controllers
             }
         }
 
-        /// <summary>
-        /// Called by SpeedBoostAbility when speed multiplier changes
-        /// </summary>
         private void OnSpeedBoostMultiplierChanged(float multiplier)
         {
-            // Apply speed multiplier to MovingState
             if (movingState != null)
             {
                 movingState.SetSpeedMultiplier(multiplier);
@@ -344,7 +408,6 @@ namespace Hanzo.Player.Controllers
             }
         }
 
-        // IMovementController Interface Methods
         public void SetVelocity(Vector3 velocity)
         {
             if (rb != null)
@@ -363,7 +426,8 @@ namespace Hanzo.Player.Controllers
 
         public void ChangeState(IMovementState newState)
         {
-            if (newState == null) return;
+            if (newState == null)
+                return;
 
             if (currentState != null)
             {
@@ -379,7 +443,6 @@ namespace Hanzo.Player.Controllers
             currentState.Enter(this);
         }
 
-        // Public API for external systems (e.g., pickup system)
         public void AddDashStack()
         {
             dashAbility?.AddStack();
@@ -400,79 +463,21 @@ namespace Hanzo.Player.Controllers
             speedBoostAbility?.ResetStacks();
         }
 
-        // Public methods to toggle camera-relative movement
         public void SetCameraRelativeMovement(bool enabled)
         {
             useCameraRelativeMovement = enabled;
         }
 
-        // Photon RPC Methods for network synchronization
-        [PunRPC]
-        private void RPC_PlayDashVisuals()
-        {
-            if (photonView.IsMine) return;
-
-            if (animator != null)
-            {
-                animator.SetBool("DASH", true);
-            }
-
-            Debug.Log("Remote player started dashing");
-        }
-
-        [PunRPC]
-        private void RPC_StopDashVisuals()
-        {
-            if (photonView.IsMine) return;
-
-            if (animator != null)
-            {
-                animator.SetBool("DASH", false);
-            }
-
-            Debug.Log("Remote player stopped dashing");
-        }
-
-        [PunRPC]
-        private void RPC_PlaySpeedBoostVisuals(int stackLevel)
-        {
-            if (photonView.IsMine) return;
-
-            if (animator != null)
-            {
-                animator.SetBool("SPEEDBOOST", true);
-            }
-
-            Debug.Log($"Remote player activated Speed Boost (Stack {stackLevel})");
-        }
-
-        [PunRPC]
-        private void RPC_StopSpeedBoostVisuals()
-        {
-            if (photonView.IsMine) return;
-
-            if (animator != null)
-            {
-                animator.SetBool("SPEEDBOOST", false);
-            }
-
-            Debug.Log("Remote player deactivated Speed Boost");
-        }
-
-         private void OnTriggerEnter(Collider other) {
-            if(other.CompareTag("Item")){
-                other.gameObject.SetActive(false);
-            }
-        }
-
         private void OnGUI()
         {
-            if (!showDebugInfo || !photonView.IsMine) return;
+            if (!showDebugInfo || !photonView.IsMine)
+                return;
 
-            GUILayout.BeginArea(new Rect(10, 10, 350, 450));
+            GUILayout.BeginArea(new Rect(10, 10, 350, 500));
             GUILayout.Label("=== PLAYER MOVEMENT ===");
             GUILayout.Label($"State: {currentState?.GetType().Name ?? "None"}");
             GUILayout.Label($"Velocity: {rb.velocity.magnitude:F2} m/s");
+            GUILayout.Label($"Velocity Y: {rb.velocity.y:F2} m/s");
             GUILayout.Label($"Raw Input: {rawInput}");
             GUILayout.Label($"Camera-Relative: {useCameraRelativeMovement}");
             if (useCameraRelativeMovement)
@@ -493,15 +498,13 @@ namespace Hanzo.Player.Controllers
             GUILayout.Label($"Stack Level: {speedBoostAbility?.StackLevel ?? 0}");
             GUILayout.Label($"Speed Multiplier: {speedBoostAbility?.CurrentSpeedMultiplier ?? 1f:F2}x");
 
-            GUILayout.Space(10);
-            GUILayout.Label("=== CAMERA ===");
-            GUILayout.Label($"Virtual Camera: {(virtualCamera != null ? "Found" : "Not Found")}");
-            GUILayout.Label($"Main Camera: {(mainCamera != null ? "Found" : "Not Found")}");
-
             if (stateController != null)
             {
                 GUILayout.Space(10);
+                GUILayout.Label("=== STATE CONTROLLER ===");
                 GUILayout.Label($"Stunned: {stateController.IsStunned}");
+                GUILayout.Label($"Falling: {stateController.IsFalling}");
+                GUILayout.Label($"Grounded: {stateController.IsGrounded}");
             }
 
             GUILayout.EndArea();
@@ -517,7 +520,6 @@ namespace Hanzo.Player.Controllers
                 speedBoostAbility.OnSpeedMultiplierChanged -= OnSpeedBoostMultiplierChanged;
             }
 
-            // Clean up virtual camera when player is destroyed (only if it was unparented)
             if (virtualCamera != null && virtualCamera.transform.parent == null)
             {
                 Destroy(virtualCamera.gameObject);

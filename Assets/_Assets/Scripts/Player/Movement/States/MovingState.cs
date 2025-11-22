@@ -1,4 +1,3 @@
-
 using UnityEngine;
 using Hanzo.Core.Interfaces;
 using Hanzo.Player.Core;
@@ -37,17 +36,39 @@ namespace Hanzo.Player.Movement.States
         
         public void Enter(IMovementController controller)
         {
-            controller.Rigidbody.drag = settings.GroundDrag;
-            
             // Set RUN animation to true when entering moving state
             if (controller.Animator != null)
             {
                 controller.Animator.SetBool(IsRunningHash, true);
             }
+            
+            Debug.Log($"[MovingState] Entered - Drag: {controller.Rigidbody.drag}");
         }
         
         public void Update(IMovementController controller)
         {
+            // Get PlayerStateController reference
+            var stateController = controller.Transform.GetComponent<Hanzo.Player.Controllers.PlayerStateController>();
+            
+            // CRITICAL FIX: Only apply movement if GROUNDED
+            bool isGrounded = stateController != null ? stateController.IsGrounded : false;
+            
+            if (!isGrounded)
+            {
+                // Not grounded - don't apply any movement forces
+                // But keep input smoothing active so it's ready when we land
+                smoothedInput = Vector2.SmoothDamp(smoothedInput, moveInput, ref inputVelocity, settings.InputSmoothing);
+                return;
+            }
+            
+            // We're grounded - apply normal movement
+            
+            // Set ground drag (only if we're grounded)
+            if (controller.Rigidbody.drag != settings.GroundDrag)
+            {
+                controller.Rigidbody.drag = settings.GroundDrag;
+            }
+            
             // Smooth input for better feel
             smoothedInput = Vector2.SmoothDamp(smoothedInput, moveInput, ref inputVelocity, settings.InputSmoothing);
             
@@ -58,6 +79,7 @@ namespace Hanzo.Player.Movement.States
             
             // Apply movement force WITH speed boost multiplier
             float effectiveMoveSpeed = settings.MoveSpeed * currentSpeedMultiplier;
+            
             Vector3 targetVelocity = moveDirection * effectiveMoveSpeed;
             Vector3 currentVelocity = new Vector3(controller.Velocity.x, 0, controller.Velocity.z);
             Vector3 velocityDiff = targetVelocity - currentVelocity;
@@ -92,11 +114,13 @@ namespace Hanzo.Player.Movement.States
             {
                 controller.Animator.SetBool(IsRunningHash, false);
             }
+            
+            Debug.Log("[MovingState] Exited");
         }
         
         public bool CanTransitionTo(IMovementState newState)
         {
-            return newState is IdleState;
+            return true; // Allow all transitions
         }
     }
 }
