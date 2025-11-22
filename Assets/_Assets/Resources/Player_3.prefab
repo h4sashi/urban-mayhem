@@ -3657,7 +3657,7 @@ MonoBehaviour:
   groundCheckDistance: 0.3
   groundLayer:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 0
   enableFallDamage: 0
   fallDamageThreshold: 5
   fallDamageMultiplier: 10
@@ -3865,11 +3865,17 @@ MonoBehaviour:
     SynchronizeType: 0
     Name: STUNNED
   - Type: 4
-    SynchronizeType: 0
+    SynchronizeType: 1
     Name: GETUP
   - Type: 4
-    SynchronizeType: 0
+    SynchronizeType: 1
     Name: SPEEDBOOST
+  - Type: 4
+    SynchronizeType: 1
+    Name: FALLING
+  - Type: 4
+    SynchronizeType: 1
+    Name: GROUNDED
   m_SynchronizeLayers:
   - SynchronizeType: 0
     LayerIndex: 0

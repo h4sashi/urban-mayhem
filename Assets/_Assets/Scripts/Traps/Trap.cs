@@ -1,5 +1,6 @@
 using System.Collections;
 using Hanzo.Core.Interfaces;
+using Hanzo.Core.Utilities;
 using UnityEngine;
 
 namespace Hanzo.Traps
@@ -25,7 +26,7 @@ namespace Hanzo.Traps
         public float blastRadius = 10f;
         public float explosionForce = 500f;
         public float upwardModifier = 3f;
-        public float damage = 1f; // Changed to 1 hit per explosion
+        public float damage = 1f;
 
         [Header("Detonation")]
         public float dtSpeed = 10f;
@@ -39,22 +40,24 @@ namespace Hanzo.Traps
         public float rotationShakeIntensity = 10f;
 
         private Rigidbody rb;
-        private bool hasDetonated = false;
+        public bool hasDetonated = false;
         private TrapHandler trapHandler;
         private GameObject spawnedVFX;
 
         private Vector3 originalPosition;
         private Quaternion originalRotation;
 
+        [Header("Indicator Settings")]
+        public bool showDamageIndicator = true;
+
+        [Header("Countdown Tracking")]
+        public float currentCountdown = 0f;
+        private bool countdownActive = false;
+        private bool indicatorShown = false;
+
         void Start()
         {
             rb = GetComponent<Rigidbody>();
-
-            // Auto-start if trap type is Timed
-            if (trapType == TrapType.TimedDetonation)
-            {
-                StartCoroutine(TimedDetonationRoutine());
-            }
         }
 
         void Update()
@@ -66,6 +69,21 @@ namespace Hanzo.Traps
                 else
                     StopVFX();
             }
+
+            // Continuously check if player is in range for timed traps
+            if (trapType == TrapType.TimedDetonation && countdownActive && showDamageIndicator)
+            {
+                CheckPlayerRangeForIndicator();
+            }
+
+            if(indicatorShown == true && countdownActive)
+            {
+              DamageIndicatorManager.Instance.ShowIndicator(transform, currentCountdown);
+            }
+            else
+            {
+                DamageIndicatorManager.Instance.HideIndicator(transform);
+            }
         }
 
         public void SetTrapHandler(TrapHandler handler)
@@ -76,6 +94,8 @@ namespace Hanzo.Traps
         public void ResetTrap()
         {
             hasDetonated = false;
+            countdownActive = false;
+            indicatorShown = false;
             if (spawnedVFX != null)
             {
                 Destroy(spawnedVFX);
@@ -98,6 +118,11 @@ namespace Hanzo.Traps
         IEnumerator DetonateWithDelay()
         {
             hasDetonated = true;
+            if (showDamageIndicator && detonationDelay > 0)
+            {
+                DamageIndicatorManager.Instance?.ShowIndicator(transform, detonationDelay);
+            }
+
             if (detonationDelay > 0)
                 yield return new WaitForSeconds(detonationDelay);
 
@@ -106,9 +131,67 @@ namespace Hanzo.Traps
 
         IEnumerator TimedDetonationRoutine()
         {
-            yield return new WaitForSeconds(detonationDelay - shakeDuration);
+            countdownActive = true;
+            currentCountdown = detonationDelay;
+
+            // Check immediately if player is in range
+            if (showDamageIndicator)
+            {
+                CheckPlayerRangeForIndicator();
+            }
+
+            // Wait before shake
+            float waitTime = detonationDelay - shakeDuration;
+            float elapsed = 0f;
+
+            while (elapsed < waitTime)
+            {
+                elapsed += Time.deltaTime;
+                currentCountdown = detonationDelay - elapsed;
+                yield return null;
+            }
+
+            // Shake phase
             yield return StartCoroutine(ShakeEffect(shakeDuration));
+            
             Detonate();
+        }
+
+        void CheckPlayerRangeForIndicator()
+        {
+            if (DamageIndicatorManager.Instance == null)
+            {
+                Debug.LogWarning("[Trap] DamageIndicatorManager.Instance is NULL!");
+                return;
+            }
+
+            Transform player = GameObject.FindGameObjectWithTag("Player")?.transform;
+            if (player == null)
+                return;
+
+            float maxRange = DamageIndicatorManager.Instance.maxTrackingDistance; // Match DamageIndicatorManager's maxTrackingDistance
+            float distance = Vector3.Distance(transform.position, player.position);
+
+            if (distance <= maxRange && !indicatorShown)
+            {
+                // Player entered range - show indicator
+                Debug.Log($"[Trap] Showing indicator for {gameObject.name} (distance: {distance:F1}m, countdown: {currentCountdown:F1}s)"); 
+                indicatorShown = true;
+            }
+            else if (distance > maxRange && indicatorShown)
+            {
+                // Player left range - hide indicator
+                Debug.Log($"[Trap] Hiding indicator for {gameObject.name} (distance: {distance:F1}m)");
+                DamageIndicatorManager.Instance.HideIndicator(transform);
+                indicatorShown = false;
+            }
+        }
+
+        public float GetRemainingTime()
+        {
+            if (!countdownActive)
+                return 0f;
+            return currentCountdown;
         }
 
         IEnumerator ShakeEffect(float duration)
@@ -121,7 +204,6 @@ namespace Hanzo.Traps
             {
                 elapsed += Time.deltaTime;
 
-                // Random position/rotation shake (cartoony style)
                 transform.localPosition =
                     originalPosition + Random.insideUnitSphere * shakeIntensity;
                 transform.localRotation = Quaternion.Euler(
@@ -131,7 +213,6 @@ namespace Hanzo.Traps
                 yield return null;
             }
 
-            // Reset after shake
             transform.localPosition = originalPosition;
             transform.localRotation = originalRotation;
         }
@@ -152,6 +233,14 @@ namespace Hanzo.Traps
             if (hasDetonated)
                 return;
             hasDetonated = true;
+            countdownActive = false;
+
+            // Always try to hide indicator
+            if (showDamageIndicator)
+            {
+                DamageIndicatorManager.Instance?.HideIndicator(transform);
+                indicatorShown = false;
+            }
 
             if (detonationImpactVFX != null)
                 Instantiate(detonationImpactVFX, transform.position, Quaternion.identity);
@@ -168,9 +257,6 @@ namespace Hanzo.Traps
             if (trapHandler == null)
                 Destroy(gameObject);
         }
-
-        //    float distance = Vector3.Distance(transform.position, col.transform.position);
-        //             float forceMagnitude = explosionForce * (1 - (distance / blastRadius));
 
         void ApplyExplosionForce()
         {
@@ -207,23 +293,16 @@ namespace Hanzo.Traps
                         );
                 }
 
-                // ========== APPLY DAMAGE USING IDamageable ==========
                 IDamageable damageable = col.GetComponent<IDamageable>();
                 if (damageable == null)
                 {
-                    // Try parent if not on this collider
                     damageable = col.GetComponentInParent<IDamageable>();
                 }
 
                 if (damageable != null)
                 {
-                    // Scale damage with distance (farther = less damage)
                     float damageAmount = damage * (1 - (distance / blastRadius));
-
-                    // Ensure minimum damage
                     damageAmount = Mathf.Max(0.5f, damageAmount);
-
-                    // Apply damage with explosion type - SCORE IS HANDLED IN PlayerHealthComponent
                     damageable.TakeDamage(damageAmount, gameObject, DamageType.Explosion);
 
                     Debug.Log($"[Trap] 💣 Dealt {damageAmount} explosion damage to {col.name}");

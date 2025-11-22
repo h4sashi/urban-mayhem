@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 6847473086466248020}
   - component: {fileID: -4353571912212571646}
   - component: {fileID: 4001488066103896451}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Trap_Wedge
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -111,6 +111,13 @@ MonoBehaviour:
   explosionForce: 63.9
   upwardModifier: 16.8
   damage: 2
+  detectionRadius: 1
+  detectionCheckInterval: 0.2
+  playerDetectionLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  damageIndicatorPrefab: {fileID: 0}
+  playerTag: Player
   dtSpeed: 25
   affectedLayers:
     serializedVersion: 2
@@ -185,7 +192,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 773388698239821826}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: spawnPoint
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -215,6 +222,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1836749855924592156}
     m_Modifications:
+    - target: {fileID: 7509569067531789212, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
     - target: {fileID: 7509569067531789214, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
       propertyPath: m_Materials.Array.size
       value: 1
@@ -230,6 +241,10 @@ PrefabInstance:
     - target: {fileID: 7509569068035639639, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
       propertyPath: m_Name
       value: CFXR Fire Trail
+      objectReference: {fileID: 0}
+    - target: {fileID: 7509569068035639639, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
+      propertyPath: m_Layer
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 7509569068035639639, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
       propertyPath: m_IsActive
@@ -306,6 +321,10 @@ PrefabInstance:
     - target: {fileID: 8974009029809984153, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
       propertyPath: InitialModule.maxNumParticles
       value: 30
+      objectReference: {fileID: 0}
+    - target: {fileID: 8974009029809984156, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
+      propertyPath: m_Layer
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 8974009029809984158, guid: 34b62790d9d31c64ea200a261b6dba40, type: 3}
       propertyPath: m_Materials.Array.size
