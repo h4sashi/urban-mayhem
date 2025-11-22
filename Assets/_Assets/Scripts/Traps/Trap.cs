@@ -7,8 +7,8 @@ namespace Hanzo.Traps
 {
     public enum TrapType
     {
-        CollisionDetonation, // Explodes on impact
-        TimedDetonation, // Explodes after a delay with shaking
+        CollisionDetonation,
+        TimedDetonation,
     }
 
     public class Trap : MonoBehaviour
@@ -54,10 +54,16 @@ namespace Hanzo.Traps
         public float currentCountdown = 0f;
         private bool countdownActive = false;
         private bool indicatorShown = false;
+        private DamageIndicator activeIndicator;
+
+        // OPTIMIZATION: Cache player reference to avoid FindGameObjectWithTag every frame
+        private Transform cachedPlayer;
+        private float maxRangeSqr; // Use squared distance to avoid sqrt calculation
 
         void Start()
         {
             rb = GetComponent<Rigidbody>();
+            CachePlayerReference();
         }
 
         void Update()
@@ -74,15 +80,34 @@ namespace Hanzo.Traps
             if (trapType == TrapType.TimedDetonation && countdownActive && showDamageIndicator)
             {
                 CheckPlayerRangeForIndicator();
+                
+                // Update the indicator's remaining time directly if it's shown
+                if (indicatorShown && activeIndicator != null)
+                {
+                    activeIndicator.UpdateRemainingTime(currentCountdown);
+                }
             }
+        }
 
-            if(indicatorShown == true && countdownActive)
+        // OPTIMIZATION: Cache player reference once instead of finding every frame
+        private void CachePlayerReference()
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
             {
-              DamageIndicatorManager.Instance.ShowIndicator(transform, currentCountdown);
+                cachedPlayer = playerObj.transform;
+                
+                // Pre-calculate squared distance threshold
+                if (DamageIndicatorManager.Instance != null)
+                {
+                    float maxRange = DamageIndicatorManager.Instance.maxTrackingDistance;
+                    maxRangeSqr = maxRange * maxRange;
+                }
             }
             else
             {
-                DamageIndicatorManager.Instance.HideIndicator(transform);
+                // Retry if player not found yet
+                Invoke(nameof(CachePlayerReference), 0.5f);
             }
         }
 
@@ -96,6 +121,7 @@ namespace Hanzo.Traps
             hasDetonated = false;
             countdownActive = false;
             indicatorShown = false;
+            activeIndicator = null;
             if (spawnedVFX != null)
             {
                 Destroy(spawnedVFX);
@@ -152,37 +178,49 @@ namespace Hanzo.Traps
             }
 
             // Shake phase
+            currentCountdown = shakeDuration;
             yield return StartCoroutine(ShakeEffect(shakeDuration));
             
             Detonate();
         }
 
+        // OPTIMIZATION: Zero-allocation distance check using sqrMagnitude
         void CheckPlayerRangeForIndicator()
         {
-            if (DamageIndicatorManager.Instance == null)
+            if (DamageIndicatorManager.Instance == null || cachedPlayer == null)
             {
-                Debug.LogWarning("[Trap] DamageIndicatorManager.Instance is NULL!");
+                // Try to cache player if not found
+                if (cachedPlayer == null)
+                    CachePlayerReference();
                 return;
             }
 
-            Transform player = GameObject.FindGameObjectWithTag("Player")?.transform;
-            if (player == null)
-                return;
+            // Use sqrMagnitude to avoid expensive Sqrt calculation
+            float distanceSqr = (transform.position - cachedPlayer.position).sqrMagnitude;
 
-            float maxRange = DamageIndicatorManager.Instance.maxTrackingDistance; // Match DamageIndicatorManager's maxTrackingDistance
-            float distance = Vector3.Distance(transform.position, player.position);
-
-            if (distance <= maxRange && !indicatorShown)
+            if (distanceSqr <= maxRangeSqr && !indicatorShown)
             {
-                // Player entered range - show indicator
-                Debug.Log($"[Trap] Showing indicator for {gameObject.name} (distance: {distance:F1}m, countdown: {currentCountdown:F1}s)"); 
+                // Player entered range - show indicator ONCE
+                float actualDistance = Mathf.Sqrt(distanceSqr); // Only calc when needed for logging
+                Debug.Log($"[Trap] Showing indicator for {gameObject.name} (distance: {actualDistance:F1}m, countdown: {currentCountdown:F1}s)");
+                DamageIndicatorManager.Instance.ShowIndicator(transform, currentCountdown);
+                
+                // Cache the indicator reference for direct updates
+                var activeIndicators = DamageIndicatorManager.Instance.GetActiveIndicators();
+                if (activeIndicators.TryGetValue(transform, out DamageIndicator indicator))
+                {
+                    activeIndicator = indicator;
+                }
+                
                 indicatorShown = true;
             }
-            else if (distance > maxRange && indicatorShown)
+            else if (distanceSqr > maxRangeSqr && indicatorShown)
             {
                 // Player left range - hide indicator
-                Debug.Log($"[Trap] Hiding indicator for {gameObject.name} (distance: {distance:F1}m)");
+                float actualDistance = Mathf.Sqrt(distanceSqr);
+                Debug.Log($"[Trap] Hiding indicator for {gameObject.name} (distance: {actualDistance:F1}m)");
                 DamageIndicatorManager.Instance.HideIndicator(transform);
+                activeIndicator = null;
                 indicatorShown = false;
             }
         }
@@ -203,6 +241,7 @@ namespace Hanzo.Traps
             while (elapsed < duration)
             {
                 elapsed += Time.deltaTime;
+                currentCountdown = duration - elapsed;
 
                 transform.localPosition =
                     originalPosition + Random.insideUnitSphere * shakeIntensity;
@@ -239,6 +278,7 @@ namespace Hanzo.Traps
             if (showDamageIndicator)
             {
                 DamageIndicatorManager.Instance?.HideIndicator(transform);
+                activeIndicator = null;
                 indicatorShown = false;
             }
 

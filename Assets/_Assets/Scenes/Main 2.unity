@@ -6960,7 +6960,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &157466308
 Transform:
   m_ObjectHideFlags: 0
@@ -48542,7 +48542,7 @@ MonoBehaviour:
   indicatorPrefab: {fileID: 6365897639340702603, guid: c9298350dc541477c9b58aca2b2cc07a, type: 3}
   indicatorContainer: {fileID: 1143255817}
   poolSize: 8
-  maxTrackingDistance: 80
+  maxTrackingDistance: 50
   maxActiveIndicators: 5
 --- !u!1001 &1146623234
 PrefabInstance:

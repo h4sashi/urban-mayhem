@@ -26,7 +26,7 @@ namespace Hanzo.Core.Utilities
         public float maxTrackingDistance = 50f;
 
         [SerializeField]
-        public int maxActiveIndicators = 5; // Limit for mobile performance
+        private int maxActiveIndicators = 5; // Limit for mobile performance
 
         // Object pool
         private List<DamageIndicator> pool;
@@ -108,10 +108,8 @@ namespace Hanzo.Core.Utilities
         /// </summary>
         public void ShowIndicator(Transform trapTransform, float duration)
         {
-            if (!playerCached || trapTransform == null){
-                Debug.LogWarning("[DIM] Cannot show indicator - player not cached or trapTransform is NULL.");
+            if (!playerCached || trapTransform == null)
                 return;
-            }
 
             // Check distance
             float dist = Vector3.Distance(playerTransform.position, trapTransform.position);
@@ -295,6 +293,14 @@ namespace Hanzo.Core.Utilities
                     $"[DIM]   Tracking: {kvp.Key?.name ?? "NULL"} -> {kvp.Value?.name ?? "NULL"}"
                 );
             }
+        }
+
+        /// <summary>
+        /// Gets the dictionary of active indicators for direct indicator updates
+        /// </summary>
+        public Dictionary<Transform, DamageIndicator> GetActiveIndicators()
+        {
+            return activeIndicators;
         }
     }
 }
