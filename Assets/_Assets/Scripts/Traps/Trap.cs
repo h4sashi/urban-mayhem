@@ -1,7 +1,9 @@
 using System.Collections;
+using System.Collections.Generic;
 using Hanzo.Core.Interfaces;
 using Hanzo.Core.Utilities;
 using UnityEngine;
+using Photon.Pun;
 
 namespace Hanzo.Traps
 {
@@ -53,17 +55,24 @@ namespace Hanzo.Traps
         [Header("Countdown Tracking")]
         public float currentCountdown = 0f;
         private bool countdownActive = false;
-        private bool indicatorShown = false;
-        private DamageIndicator activeIndicator;
 
-        // OPTIMIZATION: Cache player reference to avoid FindGameObjectWithTag every frame
-        private Transform cachedPlayer;
-        private float maxRangeSqr; // Use squared distance to avoid sqrt calculation
+        // PHOTON MULTIPLAYER: Track indicators per player
+        private Dictionary<Transform, PlayerIndicatorData> playerIndicators = 
+            new Dictionary<Transform, PlayerIndicatorData>();
+
+        private class PlayerIndicatorData
+        {
+            public Transform playerTransform;
+            public DamageIndicatorManager manager;
+            public DamageIndicator indicator;
+            public bool isShown;
+            public float maxRangeSqr;
+        }
 
         void Start()
         {
             rb = GetComponent<Rigidbody>();
-            CachePlayerReference();
+            FindAllPlayers();
         }
 
         void Update()
@@ -76,38 +85,52 @@ namespace Hanzo.Traps
                     StopVFX();
             }
 
-            // Continuously check if player is in range for timed traps
+            // Check all players for proximity
             if (trapType == TrapType.TimedDetonation && countdownActive && showDamageIndicator)
             {
-                CheckPlayerRangeForIndicator();
-                
-                // Update the indicator's remaining time directly if it's shown
-                if (indicatorShown && activeIndicator != null)
-                {
-                    activeIndicator.UpdateRemainingTime(currentCountdown);
-                }
+                CheckAllPlayersForIndicators();
             }
         }
 
-        // OPTIMIZATION: Cache player reference once instead of finding every frame
-        private void CachePlayerReference()
+        /// <summary>
+        /// PHOTON: Find all players and their indicator managers
+        /// </summary>
+        private void FindAllPlayers()
         {
-            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-            if (playerObj != null)
+            playerIndicators.Clear();
+
+            // Find all PhotonView components in scene
+            PhotonView[] allPhotonViews = FindObjectsOfType<PhotonView>();
+            
+            foreach (PhotonView pv in allPhotonViews)
             {
-                cachedPlayer = playerObj.transform;
-                
-                // Pre-calculate squared distance threshold
-                if (DamageIndicatorManager.Instance != null)
+                // Look for local player only (each client handles their own indicators)
+                if (pv.IsMine && pv.CompareTag("Player"))
                 {
-                    float maxRange = DamageIndicatorManager.Instance.maxTrackingDistance;
-                    maxRangeSqr = maxRange * maxRange;
+                    // Find the DamageIndicatorManager under this player's hierarchy
+                    DamageIndicatorManager manager = pv.GetComponentInChildren<DamageIndicatorManager>();
+                    
+                    if (manager != null && manager.IsLocalPlayerManager())
+                    {
+                        PlayerIndicatorData data = new PlayerIndicatorData
+                        {
+                            playerTransform = pv.transform,
+                            manager = manager,
+                            indicator = null,
+                            isShown = false,
+                            maxRangeSqr = manager.maxTrackingDistance * manager.maxTrackingDistance
+                        };
+                        
+                        playerIndicators[pv.transform] = data;
+                        Debug.Log($"[Trap] Registered local player {pv.ViewID} for damage indicators");
+                    }
                 }
             }
-            else
+
+            if (playerIndicators.Count == 0)
             {
-                // Retry if player not found yet
-                Invoke(nameof(CachePlayerReference), 0.5f);
+                // Retry if no players found yet
+                Invoke(nameof(FindAllPlayers), 0.5f);
             }
         }
 
@@ -120,8 +143,17 @@ namespace Hanzo.Traps
         {
             hasDetonated = false;
             countdownActive = false;
-            indicatorShown = false;
-            activeIndicator = null;
+            
+            // Clear all player indicators
+            foreach (var data in playerIndicators.Values)
+            {
+                if (data.isShown && data.manager != null)
+                {
+                    data.manager.HideIndicator(transform);
+                }
+            }
+            playerIndicators.Clear();
+            
             if (spawnedVFX != null)
             {
                 Destroy(spawnedVFX);
@@ -141,29 +173,15 @@ namespace Hanzo.Traps
             }
         }
 
-        IEnumerator DetonateWithDelay()
-        {
-            hasDetonated = true;
-            if (showDamageIndicator && detonationDelay > 0)
-            {
-                DamageIndicatorManager.Instance?.ShowIndicator(transform, detonationDelay);
-            }
-
-            if (detonationDelay > 0)
-                yield return new WaitForSeconds(detonationDelay);
-
-            Detonate();
-        }
-
         IEnumerator TimedDetonationRoutine()
         {
             countdownActive = true;
             currentCountdown = detonationDelay;
 
-            // Check immediately if player is in range
+            // Check immediately if any players are in range
             if (showDamageIndicator)
             {
-                CheckPlayerRangeForIndicator();
+                CheckAllPlayersForIndicators();
             }
 
             // Wait before shake
@@ -180,48 +198,64 @@ namespace Hanzo.Traps
             // Shake phase
             currentCountdown = shakeDuration;
             yield return StartCoroutine(ShakeEffect(shakeDuration));
-            
+
             Detonate();
         }
 
-        // OPTIMIZATION: Zero-allocation distance check using sqrMagnitude
-        void CheckPlayerRangeForIndicator()
+        /// <summary>
+        /// PHOTON: Check all registered players for proximity
+        /// </summary>
+        void CheckAllPlayersForIndicators()
         {
-            if (DamageIndicatorManager.Instance == null || cachedPlayer == null)
+            // Clean up any destroyed players first
+            List<Transform> toRemove = new List<Transform>();
+            foreach (var kvp in playerIndicators)
             {
-                // Try to cache player if not found
-                if (cachedPlayer == null)
-                    CachePlayerReference();
-                return;
-            }
-
-            // Use sqrMagnitude to avoid expensive Sqrt calculation
-            float distanceSqr = (transform.position - cachedPlayer.position).sqrMagnitude;
-
-            if (distanceSqr <= maxRangeSqr && !indicatorShown)
-            {
-                // Player entered range - show indicator ONCE
-                float actualDistance = Mathf.Sqrt(distanceSqr); // Only calc when needed for logging
-                Debug.Log($"[Trap] Showing indicator for {gameObject.name} (distance: {actualDistance:F1}m, countdown: {currentCountdown:F1}s)");
-                DamageIndicatorManager.Instance.ShowIndicator(transform, currentCountdown);
-                
-                // Cache the indicator reference for direct updates
-                var activeIndicators = DamageIndicatorManager.Instance.GetActiveIndicators();
-                if (activeIndicators.TryGetValue(transform, out DamageIndicator indicator))
+                if (kvp.Key == null || kvp.Value.playerTransform == null)
                 {
-                    activeIndicator = indicator;
+                    toRemove.Add(kvp.Key);
                 }
-                
-                indicatorShown = true;
             }
-            else if (distanceSqr > maxRangeSqr && indicatorShown)
+            foreach (var key in toRemove)
             {
-                // Player left range - hide indicator
-                float actualDistance = Mathf.Sqrt(distanceSqr);
-                Debug.Log($"[Trap] Hiding indicator for {gameObject.name} (distance: {actualDistance:F1}m)");
-                DamageIndicatorManager.Instance.HideIndicator(transform);
-                activeIndicator = null;
-                indicatorShown = false;
+                playerIndicators.Remove(key);
+            }
+
+            // Check each player's distance
+            foreach (var data in playerIndicators.Values)
+            {
+                if (data.playerTransform == null || data.manager == null)
+                    continue;
+
+                float distanceSqr = (transform.position - data.playerTransform.position).sqrMagnitude;
+
+                if (distanceSqr <= data.maxRangeSqr && !data.isShown)
+                {
+                    // Player entered range - show indicator
+                    data.manager.ShowIndicator(transform, currentCountdown);
+                    
+                    var activeIndicators = data.manager.GetActiveIndicators();
+                    if (activeIndicators.TryGetValue(transform, out DamageIndicator indicator))
+                    {
+                        data.indicator = indicator;
+                    }
+                    
+                    data.isShown = true;
+                    Debug.Log($"[Trap] Showing indicator for player at distance: {Mathf.Sqrt(distanceSqr):F1}m");
+                }
+                else if (distanceSqr > data.maxRangeSqr && data.isShown)
+                {
+                    // Player left range - hide indicator
+                    data.manager.HideIndicator(transform);
+                    data.indicator = null;
+                    data.isShown = false;
+                    Debug.Log($"[Trap] Hiding indicator - player out of range: {Mathf.Sqrt(distanceSqr):F1}m");
+                }
+                else if (data.isShown && data.indicator != null)
+                {
+                    // Update existing indicator
+                    data.indicator.UpdateRemainingTime(currentCountdown);
+                }
             }
         }
 
@@ -237,6 +271,10 @@ namespace Hanzo.Traps
             float elapsed = 0f;
             originalPosition = transform.localPosition;
             originalRotation = transform.localRotation;
+
+            Rigidbody rb = GetComponent<Rigidbody>();
+            if (rb != null)
+                rb.isKinematic = true;
 
             while (elapsed < duration)
             {
@@ -274,12 +312,16 @@ namespace Hanzo.Traps
             hasDetonated = true;
             countdownActive = false;
 
-            // Always try to hide indicator
+            // Hide indicators for all players
             if (showDamageIndicator)
             {
-                DamageIndicatorManager.Instance?.HideIndicator(transform);
-                activeIndicator = null;
-                indicatorShown = false;
+                foreach (var data in playerIndicators.Values)
+                {
+                    if (data.isShown && data.manager != null)
+                    {
+                        data.manager.HideIndicator(transform);
+                    }
+                }
             }
 
             if (detonationImpactVFX != null)

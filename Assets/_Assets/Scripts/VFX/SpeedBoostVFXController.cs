@@ -7,9 +7,10 @@ namespace Hanzo.VFX
     /// <summary>
     /// Manages Speed Boost visual effects including aura, particles, and material effects
     /// Monitors SPEEDBOOST animator parameter for automatic playback
+    /// NOW WITH PHOTON NETWORK SYNC
     /// </summary>
     [DisallowMultipleComponent]
-    public class SpeedBoostVFXController : MonoBehaviour
+    public class SpeedBoostVFXController : MonoBehaviourPunCallbacks
     {
         [Header("Prefab & Setup")]
         [Tooltip("Prefab containing speed boost particle systems (aura, speed lines, energy burst).")]
@@ -66,10 +67,6 @@ namespace Hanzo.VFX
         public bool IsSpeedBoostVFXActive => vfxInstance != null && vfxInstance.activeInHierarchy;
         private PhotonView photonView;
 
-
-
-
-
         private void Awake()
         {
             photonView = GetComponent<PhotonView>();
@@ -105,8 +102,8 @@ namespace Hanzo.VFX
                 SetupMaterialGlow();
             }
 
-            // Auto-find camera FX if not assigned
-            if (cameraFX == null)
+            // Auto-find camera FX if not assigned (only for local player)
+            if (cameraFX == null && photonView != null && photonView.IsMine)
             {
                 cameraFX = GetComponent<SpeedBoostCameraFX>();
             }
@@ -126,7 +123,9 @@ namespace Hanzo.VFX
 
         private void Update()
         {
-            if (photonView == null || !photonView.IsMine) return;
+            // Only the owner checks animator state
+            if (photonView == null || !photonView.IsMine) 
+                return;
     
             if (animator == null)
                 return;
@@ -149,7 +148,7 @@ namespace Hanzo.VFX
         }
 
         /// <summary>
-        /// Start speed boost VFX
+        /// Start speed boost VFX (call locally or via RPC)
         /// </summary>
         public void Play()
         {
@@ -171,8 +170,8 @@ namespace Hanzo.VFX
                 ApplyGlow();
             }
 
-            // Start camera effects
-            if (cameraFX != null)
+            // Start camera effects (only for local player)
+            if (cameraFX != null && photonView != null && photonView.IsMine)
             {
                 cameraFX.StartBoostFX();
             }
@@ -183,19 +182,19 @@ namespace Hanzo.VFX
                 emitCoroutine = StartCoroutine(EmitWhileBoosting());
             }
 
-            Debug.Log("SpeedBoostVFX: Started");
+            Debug.Log($"SpeedBoostVFX: Started (IsMine: {photonView?.IsMine})");
         }
 
         /// <summary>
-        /// Stop speed boost VFX
+        /// Stop speed boost VFX (call locally or via RPC)
         /// </summary>
         public void Stop()
         {
             if (vfxInstance == null)
                 return;
 
-            // Stop camera effects
-            if (cameraFX != null)
+            // Stop camera effects (only for local player)
+            if (cameraFX != null && photonView != null && photonView.IsMine)
             {
                 cameraFX.StopBoostFX();
             }
@@ -222,7 +221,7 @@ namespace Hanzo.VFX
             // Auto-disable after particles finish
             StartCoroutine(DisableWhenDone());
 
-            Debug.Log("SpeedBoostVFX: Stopped");
+            Debug.Log($"SpeedBoostVFX: Stopped (IsMine: {photonView?.IsMine})");
         }
 
         private void ApplyGlow()
@@ -301,6 +300,40 @@ namespace Hanzo.VFX
 
             if (vfxInstance != null)
                 vfxInstance.SetActive(false);
+        }
+
+        // ============================================
+        // PHOTON RPC METHODS - Called from SpeedBoostAbility
+        // ============================================
+
+        [PunRPC]
+        public void RPC_PlaySpeedBoostVisuals(int stackLevel)
+        {
+            Debug.Log($"[RPC] Received Play VFX command. Stack: {stackLevel}");
+            
+            // Set animator state for remote clients
+            if (animator != null)
+            {
+                animator.SetBool(isSpeedBoostHash, true);
+            }
+            
+            // Play VFX
+            Play();
+        }
+
+        [PunRPC]
+        public void RPC_StopSpeedBoostVisuals()
+        {
+            Debug.Log("[RPC] Received Stop VFX command.");
+            
+            // Set animator state for remote clients
+            if (animator != null)
+            {
+                animator.SetBool(isSpeedBoostHash, false);
+            }
+            
+            // Stop VFX
+            Stop();
         }
 
         private void OnDestroy()

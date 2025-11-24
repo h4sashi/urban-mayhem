@@ -1,16 +1,18 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Photon.Pun;
 
 namespace Hanzo.Core.Utilities
 {
     /// <summary>
     /// Manages damage indicators with object pooling for mobile performance.
-    /// Attach to a Canvas object in your scene.
+    /// Instance-based for Photon networking - each player has their own manager.
+    /// Attach to IndicatorContainer under each player's HUDCanvas.
     /// </summary>
     public class DamageIndicatorManager : MonoBehaviour
     {
-        public static DamageIndicatorManager Instance { get; private set; }
-
+        // REMOVED: Static singleton - now instance-based per player
+        
         [Header("Setup")]
         [SerializeField]
         private GameObject indicatorPrefab;
@@ -19,47 +21,57 @@ namespace Hanzo.Core.Utilities
         private Transform indicatorContainer;
 
         [SerializeField]
-        private int poolSize = 8; // Max simultaneous indicators
+        private int poolSize = 8;
 
         [Header("Settings")]
         [SerializeField]
         public float maxTrackingDistance = 50f;
 
         [SerializeField]
-        private int maxActiveIndicators = 5; // Limit for mobile performance
+        private int maxActiveIndicators = 5;
 
         // Object pool
         private List<DamageIndicator> pool;
         private Dictionary<Transform, DamageIndicator> activeIndicators;
 
-        // Cached player reference
+        // Player reference - no longer cached globally
         private Transform playerTransform;
-        private bool playerCached;
-
-        private List<TrapIndicatorRequest> pendingTraps = new List<TrapIndicatorRequest>();
-
-        private class TrapIndicatorRequest
-        {
-            public Transform trapTransform;
-            public float duration;
-        }
+        private PhotonView playerPhotonView;
+        private bool isLocalPlayer;
 
         private void Awake()
         {
-            // Singleton setup
-            if (Instance != null && Instance != this)
+            // NO singleton - each player has their own instance
+            InitializePlayerReference();
+            
+            if (isLocalPlayer)
             {
-                Destroy(gameObject);
-                return;
+                InitializePool();
             }
-            Instance = this;
-
-            InitializePool();
+            else
+            {
+                // Disable for non-local players
+                enabled = false;
+            }
         }
 
-        private void Start()
+        private void InitializePlayerReference()
         {
-            CachePlayerReference();
+            // Get PhotonView from parent Player_4
+            playerPhotonView = GetComponentInParent<PhotonView>();
+            
+            if (playerPhotonView != null)
+            {
+                isLocalPlayer = playerPhotonView.IsMine;
+                playerTransform = playerPhotonView.transform;
+                
+                Debug.Log($"[DIM] Player {playerPhotonView.ViewID} - IsLocal: {isLocalPlayer}");
+            }
+            else
+            {
+                Debug.LogError("[DIM] No PhotonView found in parent! Make sure this is under Player_4.");
+                enabled = false;
+            }
         }
 
         private RectTransform canvasRect;
@@ -69,7 +81,6 @@ namespace Hanzo.Core.Utilities
             pool = new List<DamageIndicator>(poolSize);
             activeIndicators = new Dictionary<Transform, DamageIndicator>(poolSize);
 
-            // Cache canvas RectTransform for screen bounds calculation
             canvasRect = indicatorContainer
                 .GetComponentInParent<Canvas>()
                 .GetComponent<RectTransform>();
@@ -78,37 +89,21 @@ namespace Hanzo.Core.Utilities
             {
                 GameObject obj = Instantiate(indicatorPrefab, indicatorContainer);
                 DamageIndicator indicator = obj.GetComponent<DamageIndicator>();
-                indicator.Initialize(canvasRect); // Pass canvas reference
+                indicator.Initialize(canvasRect);
                 indicator.Deactivate();
                 pool.Add(indicator);
             }
 
-            Debug.Log($"[DIM] Initialized pool with {pool.Count} indicators");
-        }
-
-        private void CachePlayerReference()
-        {
-            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-            if (playerObj != null)
-            {
-                playerTransform = playerObj.transform;
-                playerCached = true;
-                Debug.Log($"[DIM] Player reference cached: {playerTransform.name}");
-            }
-            else
-            {
-                Debug.LogWarning("[DIM] Player not found! Will retry...");
-                Invoke(nameof(CachePlayerReference), 0.5f);
-            }
+            Debug.Log($"[DIM] Initialized pool with {pool.Count} indicators for local player");
         }
 
         /// <summary>
         /// Shows indicator for a trap that's about to detonate.
-        /// Call this when TimedDetonation starts its countdown.
+        /// Only works if this is the local player's manager.
         /// </summary>
         public void ShowIndicator(Transform trapTransform, float duration)
         {
-            if (!playerCached || trapTransform == null)
+            if (!isLocalPlayer || playerTransform == null || trapTransform == null)
                 return;
 
             // Check distance
@@ -147,7 +142,7 @@ namespace Hanzo.Core.Utilities
         /// </summary>
         public void HideIndicator(Transform trapTransform)
         {
-            if (trapTransform == null)
+            if (!isLocalPlayer || trapTransform == null)
                 return;
 
             if (activeIndicators.TryGetValue(trapTransform, out DamageIndicator indicator))
@@ -180,7 +175,7 @@ namespace Hanzo.Core.Utilities
             foreach (var kvp in activeIndicators)
             {
                 if (kvp.Key == null)
-                    continue; // Skip destroyed transforms
+                    continue;
 
                 float dist = kvp.Value.GetDistanceToPlayer();
                 if (dist > maxDist)
@@ -198,7 +193,7 @@ namespace Hanzo.Core.Utilities
 
         private void Update()
         {
-            if (!playerCached)
+            if (!isLocalPlayer || playerTransform == null)
                 return;
 
             // Clean up any null transforms and check distances
@@ -206,14 +201,12 @@ namespace Hanzo.Core.Utilities
             
             foreach (var kvp in activeIndicators)
             {
-                // Remove destroyed transforms
                 if (kvp.Key == null)
                 {
                     toRemove.Add(kvp.Key);
                     continue;
                 }
 
-                // Check if player has moved out of range
                 float distance = Vector3.Distance(playerTransform.position, kvp.Key.position);
                 if (distance > maxTrackingDistance)
                 {
@@ -222,76 +215,9 @@ namespace Hanzo.Core.Utilities
                 }
             }
 
-            // Deactivate all indicators marked for removal
             foreach (var key in toRemove)
             {
                 HideIndicator(key);
-            }
-
-            if (toRemove.Count > 0)
-            {
-                Debug.Log($"[DIM] Cleaned up {toRemove.Count} indicators");
-            }
-        }
-
-        /// <summary>
-        /// Call when player takes damage from a direction (original damage indicator use)
-        /// </summary>
-        public void ShowDamageFromDirection(Vector3 damageSourcePosition, float duration = 2f)
-        {
-            if (!playerCached)
-                return;
-
-            // Create temporary tracker object (reuse pool)
-            DamageIndicator indicator = GetFromPool();
-            if (indicator == null)
-                return;
-
-            // For directional damage, we create a virtual target
-            GameObject tempTarget = new GameObject("DamageSource_Temp");
-            tempTarget.transform.position = damageSourcePosition;
-
-            indicator.Activate(tempTarget.transform, playerTransform, duration, 0.8f);
-
-            // Clean up temp object when indicator deactivates
-            StartCoroutine(CleanupTempTarget(tempTarget, duration + 0.1f));
-        }
-
-        private System.Collections.IEnumerator CleanupTempTarget(GameObject target, float delay)
-        {
-            yield return new WaitForSeconds(delay);
-            if (target != null)
-                Destroy(target);
-        }
-
-        /// <summary>
-        /// Updates player reference if it changes (respawn, etc.)
-        /// </summary>
-        public void SetPlayerReference(Transform newPlayer)
-        {
-            playerTransform = newPlayer;
-            playerCached = newPlayer != null;
-        }
-
-        private void OnDestroy()
-        {
-            if (Instance == this)
-            {
-                Instance = null;
-            }
-        }
-
-        // Debug method to show current state
-        public void DebugState()
-        {
-            Debug.Log(
-                $"[DIM] DEBUG - Pool: {pool.Count}, Active: {activeIndicators.Count}, PlayerCached: {playerCached}"
-            );
-            foreach (var kvp in activeIndicators)
-            {
-                Debug.Log(
-                    $"[DIM]   Tracking: {kvp.Key?.name ?? "NULL"} -> {kvp.Value?.name ?? "NULL"}"
-                );
             }
         }
 
@@ -301,6 +227,11 @@ namespace Hanzo.Core.Utilities
         public Dictionary<Transform, DamageIndicator> GetActiveIndicators()
         {
             return activeIndicators;
+        }
+
+        public bool IsLocalPlayerManager()
+        {
+            return isLocalPlayer;
         }
     }
 }

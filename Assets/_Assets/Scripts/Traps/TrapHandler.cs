@@ -9,19 +9,19 @@ namespace Hanzo.Traps
         [Header("Trap References")]
         public GameObject trapPrefab;
         public Transform spawnTransform;
-        
+
         [Header("Spawn Settings")]
         public Vector3 spawnOffset = Vector3.zero;
         public float respawnDelay = 15f;
         public bool autoRespawn = true;
-        
+
         [Header("Object Pool Settings")]
         public int poolSize = 3;
-        
+
         [Header("Trap Configuration")]
         public float trapMass = 5f;
         public bool useConvexCollider = true;
-        
+
         private Queue<GameObject> trapPool = new Queue<GameObject>();
         private GameObject currentTrap;
         private bool isWaitingToRespawn = false;
@@ -38,7 +38,7 @@ namespace Hanzo.Traps
             {
                 GameObject trap = Instantiate(trapPrefab);
                 trap.SetActive(false);
-                
+
                 // Disable Trap component initially
                 Trap trapScript = trap.GetComponent<Trap>();
                 if (trapScript != null)
@@ -47,7 +47,7 @@ namespace Hanzo.Traps
                     // Register callback for when trap is destroyed
                     trapScript.SetTrapHandler(this);
                 }
-                
+
                 trapPool.Enqueue(trap);
             }
         }
@@ -64,14 +64,14 @@ namespace Hanzo.Traps
                 // Pool exhausted, create new trap
                 GameObject trap = Instantiate(trapPrefab);
                 trap.SetActive(false);
-                
+
                 Trap trapScript = trap.GetComponent<Trap>();
                 if (trapScript != null)
                 {
                     trapScript.enabled = false;
                     trapScript.SetTrapHandler(this);
                 }
-                
+
                 return trap;
             }
         }
@@ -85,62 +85,65 @@ namespace Hanzo.Traps
         }
 
         void ResetTrap(GameObject trap)
-{
-    // Remove dynamically added components
-    Rigidbody rb = trap.GetComponent<Rigidbody>();
-    if (rb != null) Destroy(rb);
+        {
+            // Remove dynamically added components
+            Rigidbody rb = trap.GetComponent<Rigidbody>();
+            if (rb != null)
+                Destroy(rb);
 
-    MeshCollider meshCol = trap.GetComponent<MeshCollider>();
-    if (meshCol != null) Destroy(meshCol);
+            MeshCollider meshCol = trap.GetComponent<MeshCollider>();
+            if (meshCol != null)
+                Destroy(meshCol);
 
-    // Reset Trap script (this will disable emission)
-    Trap trapScript = trap.GetComponent<Trap>();
-    if (trapScript != null)
-    {
-        trapScript.enabled = false;
-        trapScript.ResetTrap();
-    }
+            // Reset Trap script (this will disable emission)
+            Trap trapScript = trap.GetComponent<Trap>();
+            if (trapScript != null)
+            {
+                trapScript.enabled = false;
+                trapScript.ResetTrap();
+            }
 
-    // Reset transform
-    trap.transform.parent = spawnTransform;
-    trap.transform.localPosition = Vector3.zero;
-    trap.transform.localRotation = Quaternion.identity;
-    trap.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
-}
+            // Reset transform
+            trap.transform.parent = spawnTransform;
+            trap.transform.localPosition = Vector3.zero;
+            trap.transform.localRotation = Quaternion.identity;
+            trap.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
+        }
 
-       void SpawnTrap()
-{
-    if (currentTrap != null) return;
+        void SpawnTrap()
+        {
+            if (currentTrap != null)
+                return;
 
-    currentTrap = GetTrapFromPool();
-    currentTrap.SetActive(true);
-    
-    // Position trap at spawn point with offset
-    Vector3 spawnPos = spawnTransform.position + spawnOffset;
-    currentTrap.transform.position = spawnPos;
-    currentTrap.transform.rotation = spawnTransform.rotation;
-    currentTrap.transform.parent = spawnTransform;
-    currentTrap.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
-    
-    isWaitingToRespawn = false;
-    
-    // Auto-activate timed traps immediately
-    Trap trapScript = currentTrap.GetComponent<Trap>();
-    if (trapScript != null && trapScript.trapType == TrapType.TimedDetonation)
-    {
-        ActivateTrap(currentTrap);
-    }
-}
+            currentTrap = GetTrapFromPool();
+            currentTrap.SetActive(true);
+
+            // Position trap at spawn point with offset
+            Vector3 spawnPos = spawnTransform.position + spawnOffset;
+            currentTrap.transform.position = spawnPos;
+            currentTrap.transform.rotation = spawnTransform.rotation;
+            currentTrap.transform.parent = spawnTransform;
+            currentTrap.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
+
+            isWaitingToRespawn = false;
+
+            // Auto-activate timed traps immediately
+            Trap trapScript = currentTrap.GetComponent<Trap>();
+            if (trapScript != null && trapScript.trapType == TrapType.TimedDetonation)
+            {
+                ActivateTrap(currentTrap);
+            }
+        }
 
         public void OnTrapDetonated(GameObject trap)
         {
             if (trap == currentTrap)
             {
                 currentTrap = null;
-                
+
                 // Return to pool after destruction animation completes
                 StartCoroutine(ReturnTrapAfterDelay(trap, 1f));
-                
+
                 // Start respawn timer
                 if (autoRespawn && !isWaitingToRespawn)
                 {
@@ -162,41 +165,46 @@ namespace Hanzo.Traps
             SpawnTrap();
         }
 
-      private void OnTriggerEnter(Collider other)
-{
-    if (other.CompareTag("Player") && currentTrap != null)
-    {
-        Trap trapScript = currentTrap.GetComponent<Trap>();
-        
-        // Only trigger collision-based traps
-        if (trapScript != null && trapScript.trapType == TrapType.CollisionDetonation)
+        private void OnTriggerEnter(Collider other)
         {
-            ActivateTrap(currentTrap);
+            if (other.CompareTag("Player") && currentTrap != null)
+            {
+                Trap trapScript = currentTrap.GetComponent<Trap>();
+
+                // Only trigger collision-based traps
+                if (trapScript != null && trapScript.trapType == TrapType.CollisionDetonation)
+                {
+                    ActivateTrap(currentTrap);
+                }
+            }
         }
-    }
-}
 
-      void ActivateTrap(GameObject trap)
-{
-    // Detach from handler
-    trap.transform.parent = null;
+        void ActivateTrap(GameObject trap)
+        {
+            trap.transform.parent = null;
 
-    // Add physics components
-    Rigidbody rb = trap.AddComponent<Rigidbody>();
-    rb.mass = trapMass;
+            MeshCollider meshCol = trap.AddComponent<MeshCollider>();
+            meshCol.convex = useConvexCollider;
 
-    MeshCollider meshCol = trap.AddComponent<MeshCollider>();
-    meshCol.convex = useConvexCollider;
+            Rigidbody rb = trap.AddComponent<Rigidbody>();
+            rb.mass = trapMass;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
 
-    // Enable trap script
-    Trap trapScript = trap.GetComponent<Trap>();
-    if (trapScript != null)
-    {
-        trapScript.enabled = true;
-        trapScript.isPlayingVFX = true;
-        trapScript.ActivateTrap(); // Start the appropriate behavior
-    }
-}
+            Trap trapScript = trap.GetComponent<Trap>();
+            if (trapScript != null)
+            {
+                trapScript.enabled = true;
+
+                // Make kinematic for timed traps during countdown
+                if (trapScript.trapType == TrapType.TimedDetonation)
+                {
+                    rb.isKinematic = true;
+                }
+
+                trapScript.isPlayingVFX = true;
+                trapScript.ActivateTrap();
+            }
+        }
 
         // Manual spawn for testing
         public void ManualSpawn()
