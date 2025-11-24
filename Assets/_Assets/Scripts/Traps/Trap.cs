@@ -93,14 +93,15 @@ namespace Hanzo.Traps
         }
 
         /// <summary>
-        /// PHOTON: Find all players and their indicator managers
+        /// ONLINE & OFFLINE: Find all players and their indicator managers
         /// </summary>
         private void FindAllPlayers()
         {
             playerIndicators.Clear();
 
-            // Find all PhotonView components in scene
+            // Try ONLINE mode first (Photon Network)
             PhotonView[] allPhotonViews = FindObjectsOfType<PhotonView>();
+            bool foundOnlinePlayer = false;
             
             foreach (PhotonView pv in allPhotonViews)
             {
@@ -122,7 +123,34 @@ namespace Hanzo.Traps
                         };
                         
                         playerIndicators[pv.transform] = data;
-                        Debug.Log($"[Trap] Registered local player {pv.ViewID} for damage indicators");
+                        foundOnlinePlayer = true;
+                        Debug.Log($"[Trap] ONLINE - Registered player {pv.ViewID} for damage indicators");
+                    }
+                }
+            }
+
+            // If no online players found, try OFFLINE mode
+            if (!foundOnlinePlayer)
+            {
+                GameObject[] allPlayers = GameObject.FindGameObjectsWithTag("Player");
+                
+                foreach (GameObject playerObj in allPlayers)
+                {
+                    DamageIndicatorManager manager = playerObj.GetComponentInChildren<DamageIndicatorManager>();
+                    
+                    if (manager != null)
+                    {
+                        PlayerIndicatorData data = new PlayerIndicatorData
+                        {
+                            playerTransform = playerObj.transform,
+                            manager = manager,
+                            indicator = null,
+                            isShown = false,
+                            maxRangeSqr = manager.maxTrackingDistance * manager.maxTrackingDistance
+                        };
+                        
+                        playerIndicators[playerObj.transform] = data;
+                        Debug.Log($"[Trap] OFFLINE - Registered player {playerObj.name} for damage indicators");
                     }
                 }
             }

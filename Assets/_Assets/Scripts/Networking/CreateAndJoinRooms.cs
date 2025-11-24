@@ -18,13 +18,22 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     [SerializeField]
     private string gameVersion = "1.0";
 
+    [Header("Game Scene")]
+    [SerializeField]
+    private string gameSceneName = "Main 2"; // Scene to load when joining room
+
     void Start()
     {
         // Basic safety: ensure Photon connected
         PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "us"; // or "eu", "asia", etc.
         PhotonNetwork.GameVersion = gameVersion;
 
-        PhotonNetwork.NickName = "Player" + Random.Range(1000, 9999);
+        // Generate a random nickname if not set
+        if (string.IsNullOrEmpty(PhotonNetwork.NickName))
+        {
+            PhotonNetwork.NickName = "Player" + Random.Range(1000, 9999);
+        }
+        
         PhotonNetwork.AutomaticallySyncScene = true;
 
         if (!PhotonNetwork.IsConnected)
@@ -62,6 +71,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
             IsVisible = true,
             IsOpen = true,
         };
+        
         Debug.Log($"[CreateAndJoinRooms] Creating room '{roomName}' (maxPlayers={maxPlayers})");
         feedbackText?.SetText($"Creating room '{roomName}'...");
         PhotonNetwork.CreateRoom(roomName, roomOptions, TypedLobby.Default);
@@ -91,26 +101,42 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     // Called when the local player has successfully joined a room
     public override void OnJoinedRoom()
     {
-        Debug.Log("[CreateAndJoinRooms] OnJoinedRoom: " + PhotonNetwork.CurrentRoom.Name);
-        feedbackText?.SetText("Joined Room: " + PhotonNetwork.CurrentRoom.Name);
+        Room room = PhotonNetwork.CurrentRoom;
+        Debug.Log($"[CreateAndJoinRooms] OnJoinedRoom: {room.Name} ({room.PlayerCount}/{room.MaxPlayers})");
+        feedbackText?.SetText($"Joined Room: {room.Name}");
 
         // Load level for all players in the room (requires AutomaticallySyncScene true)
-        Debug.Log("[CreateAndJoinRooms] Loading Main scene...");
-        PhotonNetwork.LoadLevel("Main 2"); // ensure "Main" exists in Build Settings
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Debug.Log($"[CreateAndJoinRooms] Master Client loading {gameSceneName}...");
+            PhotonNetwork.LoadLevel(gameSceneName);
+        }
     }
 
     // Called when CreateRoom fails
     public override void OnCreateRoomFailed(short returnCode, string message)
     {
         Debug.LogError($"[CreateAndJoinRooms] CreateRoomFailed: ({returnCode}) {message}");
-        feedbackText?.SetText($"Create room failed: {message} ({returnCode})");
+        feedbackText?.SetText($"Create room failed: {message}");
+        
+        // Common error: Room already exists
+        if (returnCode == 32766) // Room already exists
+        {
+            feedbackText?.SetText("Room already exists. Try a different name.");
+        }
     }
 
     // Called when JoinRoom fails
     public override void OnJoinRoomFailed(short returnCode, string message)
     {
         Debug.LogError($"[CreateAndJoinRooms] JoinRoomFailed: ({returnCode}) {message}");
-        feedbackText?.SetText($"Join room failed: {message} ({returnCode})");
+        feedbackText?.SetText($"Join room failed: {message}");
+        
+        // Common error: Room doesn't exist
+        if (returnCode == 32758) // Room not found
+        {
+            feedbackText?.SetText("Room not found. Check the name.");
+        }
     }
 
     public override void OnDisconnected(DisconnectCause cause)
@@ -123,5 +149,19 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     {
         Debug.Log("[CreateAndJoinRooms] Connected to Master.");
         feedbackText?.SetText("Connected to server.");
+    }
+
+    public override void OnPlayerEnteredRoom(Player newPlayer)
+    {
+        Room room = PhotonNetwork.CurrentRoom;
+        Debug.Log($"[CreateAndJoinRooms] Player entered: {newPlayer.NickName} ({room.PlayerCount}/{room.MaxPlayers})");
+        feedbackText?.SetText($"Players: {room.PlayerCount}/{room.MaxPlayers}");
+    }
+
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        Room room = PhotonNetwork.CurrentRoom;
+        Debug.Log($"[CreateAndJoinRooms] Player left: {otherPlayer.NickName} ({room.PlayerCount}/{room.MaxPlayers})");
+        feedbackText?.SetText($"Players: {room.PlayerCount}/{room.MaxPlayers}");
     }
 }

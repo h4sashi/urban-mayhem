@@ -62,15 +62,28 @@ namespace Hanzo.Core.Utilities
             
             if (playerPhotonView != null)
             {
+                // ONLINE: Check if this is the local player's PhotonView
                 isLocalPlayer = playerPhotonView.IsMine;
                 playerTransform = playerPhotonView.transform;
                 
-                Debug.Log($"[DIM] Player {playerPhotonView.ViewID} - IsLocal: {isLocalPlayer}");
+                Debug.Log($"[DIM] ONLINE Mode - Player {playerPhotonView.ViewID} - IsLocal: {isLocalPlayer}");
             }
             else
             {
-                Debug.LogError("[DIM] No PhotonView found in parent! Make sure this is under Player_4.");
-                enabled = false;
+                // OFFLINE: No PhotonView means single-player mode
+                // Look for any player with the "Player" tag
+                GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+                if (playerObj != null)
+                {
+                    playerTransform = playerObj.transform;
+                    isLocalPlayer = true;
+                    Debug.Log($"[DIM] OFFLINE Mode - Found player: {playerTransform.name}");
+                }
+                else
+                {
+                    Debug.LogError("[DIM] No player found! Make sure player has 'Player' tag.");
+                    enabled = false;
+                }
             }
         }
 
