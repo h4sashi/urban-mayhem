@@ -4301,13 +4301,13 @@ MonoBehaviour:
   currentHealth: 8
   respawnDelay: 8
   respawnPosition: {x: 5.137163, y: 5.137163, z: -26.7}
-  dashDamage: 2
+  dashDamage: 9
   explosionDamage: 9
   playerVirtualCamera: {fileID: 6417471412662964975}
-  respawnUI: {fileID: 818285879506140740}
+  respawnUI: {fileID: 2465847996449094001}
   respawnCountdownText: {fileID: 6582195142338547480}
   mobielHUDCanvas: {fileID: 4545531137013908489}
-  showDebugInfo: 1
+  showDebugInfo: 0
 --- !u!1 &3714995223747494948
 GameObject:
   m_ObjectHideFlags: 0

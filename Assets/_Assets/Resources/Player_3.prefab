@@ -3717,7 +3717,7 @@ MonoBehaviour:
   groundCheckRadius: 0.3
   groundLayer:
     serializedVersion: 2
-    m_Bits: 512
+    m_Bits: 513
   minFallVelocity: -2
   groundedGracePeriod: 0.15
   enableFallDamage: 0
@@ -4056,10 +4056,10 @@ MonoBehaviour:
   currentHealth: 8
   respawnDelay: 8
   respawnPosition: {x: 5.137163, y: 5.137163, z: -26.7}
-  dashDamage: 2
+  dashDamage: 9
   explosionDamage: 9
   playerVirtualCamera: {fileID: 6766659135906768308}
-  respawnUI: {fileID: 4603006851464466911}
+  respawnUI: {fileID: 1455393818322020384}
   respawnCountdownText: {fileID: 5675579501033279544}
   mobielHUDCanvas: {fileID: 5501291232339902206}
   showDebugInfo: 1

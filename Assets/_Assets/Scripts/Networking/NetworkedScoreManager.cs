@@ -22,19 +22,19 @@ namespace Hanzo.Networking
         private int scoreLostFromExplosion = 5;
 
         [SerializeField]
+        private int survivalBonusPerDeath = 5; // NEW: Bonus for each player death
+
+        [SerializeField]
         private bool showDebugInfo = true;
 
         // Custom property keys
         private const string SCORE_KEY = "PlayerScore";
         private const string HITS_TAKEN_KEY = "HitsTaken";
         private const string KILLS_KEY = "Kills";
-
         private const string DEATHS_KEY = "Deaths";
 
         // Add to local cache
         private Dictionary<int, int> playerDeaths = new Dictionary<int, int>();
-
-        // Local cache of scores for quick access
         private Dictionary<int, int> playerScores = new Dictionary<int, int>();
         private Dictionary<int, int> playerHitsTaken = new Dictionary<int, int>();
 
@@ -72,7 +72,7 @@ namespace Hanzo.Networking
                     { SCORE_KEY, 0 },
                     { HITS_TAKEN_KEY, 0 },
                     { KILLS_KEY, 0 },
-                    { DEATHS_KEY, 0 }, // ADD DEATHS TRACKING
+                    { DEATHS_KEY, 0 },
                 };
                 player.SetCustomProperties(props);
 
@@ -138,6 +138,55 @@ namespace Hanzo.Networking
             );
         }
 
+        /// <summary>
+        /// NEW: Award survival bonus to all alive players when someone dies
+        /// </summary>
+        public void AwardSurvivalBonus(int deadPlayerActorNumber)
+        {
+            if (PhotonNetwork.CurrentRoom == null)
+                return;
+
+            int alivePlayerCount = 0;
+            List<PhotonPlayer> alivePlayers = new List<PhotonPlayer>();
+
+            // Find all alive players (excluding the one who just died)
+            foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
+            {
+                if (player.ActorNumber != deadPlayerActorNumber)
+                {
+                    int playerHits = GetPlayerHitsTaken(player.ActorNumber);
+                    
+                    // If they haven't taken 8 hits, they're still alive
+                    if (playerHits < 8)
+                    {
+                        alivePlayerCount++;
+                        alivePlayers.Add(player);
+                    }
+                }
+            }
+
+            // Award bonus to each alive player
+            foreach (var alivePlayer in alivePlayers)
+            {
+                int currentScore = GetPlayerScore(alivePlayer.ActorNumber);
+                int newScore = currentScore + survivalBonusPerDeath;
+
+                Hashtable props = new Hashtable { { SCORE_KEY, newScore } };
+                alivePlayer.SetCustomProperties(props);
+
+                Debug.Log(
+                    $"[ScoreManager] 🎖️ {alivePlayer.NickName} received survival bonus +{survivalBonusPerDeath}! (Total: {newScore})"
+                );
+            }
+
+            if (alivePlayerCount > 0)
+            {
+                Debug.Log(
+                    $"[ScoreManager] 💀 Player eliminated! {alivePlayerCount} survivors received +{survivalBonusPerDeath} bonus points"
+                );
+            }
+        }
+
         public void IncrementPlayerDeaths(int actorNumber)
         {
             PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
@@ -156,6 +205,12 @@ namespace Hanzo.Networking
             player.SetCustomProperties(props);
 
             Debug.Log($"[ScoreManager] 💀 {player.NickName} has died {newDeaths} times");
+            
+            // NEW: Award survival bonus to other players
+            if (PhotonNetwork.IsMasterClient)
+            {
+                AwardSurvivalBonus(actorNumber);
+            }
         }
 
         /// <summary>
@@ -312,7 +367,6 @@ namespace Hanzo.Networking
                 playerHitsTaken[targetPlayer.ActorNumber] = newHits;
             }
 
-            // ADD DEATHS TRACKING
             if (changedProps.ContainsKey(DEATHS_KEY))
             {
                 int newDeaths = (int)changedProps[DEATHS_KEY];
@@ -338,53 +392,53 @@ namespace Hanzo.Networking
         /// <summary>
         /// Print all scores to console (for debugging)
         /// </summary>
-       public void PrintAllScores()
-{
-    if (PhotonNetwork.CurrentRoom == null) return;
-    
-    Debug.Log("========== CURRENT SCORES ==========");
-    foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
-    {
-        int score = GetPlayerScore(player.ActorNumber);
-        int hits = GetPlayerHitsTaken(player.ActorNumber);
-        int kills = GetPlayerKills(player.ActorNumber);
-        int deaths = GetPlayerDeaths(player.ActorNumber); // ADD DEATHS
-        
-        Debug.Log($"{player.NickName}: Score={score} | Hits={hits}/8 | Kills={kills} | Deaths={deaths}");
-    }
-    Debug.Log("====================================");
-}
-
-private void OnGUI()
-{
-    if (!showDebugInfo) return;
-    
-    GUILayout.BeginArea(new Rect(Screen.width - 320, 10, 300, 500)); // Increased height
-    GUILayout.Box("=== GLOBAL SCOREBOARD ===");
-    
-    if (PhotonNetwork.CurrentRoom != null)
-    {
-        foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
+        public void PrintAllScores()
         {
-            int score = GetPlayerScore(player.ActorNumber);
-            int hits = GetPlayerHitsTaken(player.ActorNumber);
-            int kills = GetPlayerKills(player.ActorNumber);
-            int deaths = GetPlayerDeaths(player.ActorNumber); // ADD DEATHS
+            if (PhotonNetwork.CurrentRoom == null) return;
             
-            GUILayout.Label($"{player.NickName}:");
-            GUILayout.Label($"  Score: {score}");
-            GUILayout.Label($"  Hits: {hits}/8");
-            GUILayout.Label($"  Kills: {kills}");
-            GUILayout.Label($"  Deaths: {deaths}"); // ADD DEATHS DISPLAY
-            GUILayout.Space(5);
+            Debug.Log("========== CURRENT SCORES ==========");
+            foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
+            {
+                int score = GetPlayerScore(player.ActorNumber);
+                int hits = GetPlayerHitsTaken(player.ActorNumber);
+                int kills = GetPlayerKills(player.ActorNumber);
+                int deaths = GetPlayerDeaths(player.ActorNumber);
+                
+                Debug.Log($"{player.NickName}: Score={score} | Hits={hits}/8 | Kills={kills} | Deaths={deaths}");
+            }
+            Debug.Log("====================================");
         }
-    }
-    else
-    {
-        GUILayout.Label("Not connected to room");
-    }
-    
-    GUILayout.EndArea();
-}
+
+        private void OnGUI()
+        {
+            if (!showDebugInfo) return;
+            
+            GUILayout.BeginArea(new Rect(Screen.width - 320, 10, 300, 500));
+            GUILayout.Box("=== GLOBAL SCOREBOARD ===");
+            
+            if (PhotonNetwork.CurrentRoom != null)
+            {
+                foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
+                {
+                    int score = GetPlayerScore(player.ActorNumber);
+                    int hits = GetPlayerHitsTaken(player.ActorNumber);
+                    int kills = GetPlayerKills(player.ActorNumber);
+                    int deaths = GetPlayerDeaths(player.ActorNumber);
+                    
+                    GUILayout.Label($"{player.NickName}:");
+                    GUILayout.Label($"  Score: {score}");
+                    GUILayout.Label($"  Hits: {hits}/8");
+                    GUILayout.Label($"  Kills: {kills}");
+                    GUILayout.Label($"  Deaths: {deaths}");
+                    GUILayout.Space(5);
+                }
+            }
+            else
+            {
+                GUILayout.Label("Not connected to room");
+            }
+            
+            GUILayout.EndArea();
+        }
     }
 }

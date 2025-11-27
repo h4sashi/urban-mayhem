@@ -1,11 +1,11 @@
+using System.Collections;
+using Cinemachine;
 using Hanzo.Core.Interfaces;
 using Hanzo.Networking;
 using Hanzo.Player.Controllers;
 using Photon.Pun;
-using UnityEngine;
 using TMPro;
-using System.Collections;
-using Cinemachine;
+using UnityEngine;
 
 namespace Hanzo.Player.Core
 {
@@ -13,19 +13,29 @@ namespace Hanzo.Player.Core
     public class PlayerHealthComponent : MonoBehaviourPun, IDamageable
     {
         [Header("Health Settings")]
-        [SerializeField] private float maxHealth = 8f;
-        [SerializeField] private float currentHealth = 8f;
+        [SerializeField]
+        private float maxHealth = 8f;
+
+        [SerializeField]
+        private float currentHealth = 8f;
 
         [Header("Respawn Settings")]
-        [SerializeField] private float respawnDelay = 3f;
-        [SerializeField] private Vector3 respawnPosition = Vector3.zero;
+        [SerializeField]
+        private float respawnDelay = 3f;
+
+        [SerializeField]
+        private Vector3 respawnPosition = Vector3.zero;
 
         [Header("Damage Settings")]
-        [SerializeField] private float dashDamage = 1f;
-        [SerializeField] private float explosionDamage = 1f;
+        [SerializeField]
+        private float dashDamage = 1f;
+
+        [SerializeField]
+        private float explosionDamage = 1f;
 
         [Header("Camera Settings")]
-        [SerializeField] private CinemachineVirtualCamera playerVirtualCamera;
+        [SerializeField]
+        private CinemachineVirtualCamera playerVirtualCamera;
 
         [Header("Spawn UI")]
         public GameObject respawnUI;
@@ -33,7 +43,8 @@ namespace Hanzo.Player.Core
         public GameObject mobielHUDCanvas;
 
         [Header("Debug")]
-        [SerializeField] private bool showDebugInfo = true;
+        [SerializeField]
+        private bool showDebugInfo = true;
 
         // Events
         public event System.Action<float, GameObject, DamageType> OnDamageTaken;
@@ -49,7 +60,7 @@ namespace Hanzo.Player.Core
         private NetworkedScoreManager scoreManager;
         private bool isDead = false;
         private Coroutine respawnCoroutine;
-        
+
         // Offline compatibility
         private bool isOfflineMode = false;
         private int offlineHitsTaken = 0;
@@ -78,13 +89,15 @@ namespace Hanzo.Player.Core
         private void Start()
         {
             CheckOfflineMode();
-            
+
             // Only get score manager if online
             if (!isOfflineMode)
             {
                 scoreManager = NetworkedScoreManager.Instance;
                 if (scoreManager == null)
-                    Debug.LogWarning("[PlayerHealth] NetworkedScoreManager not found (OK if offline)");
+                    Debug.LogWarning(
+                        "[PlayerHealth] NetworkedScoreManager not found (OK if offline)"
+                    );
             }
         }
 
@@ -96,7 +109,7 @@ namespace Hanzo.Player.Core
             try
             {
                 isOfflineMode = !PhotonNetwork.IsConnected || PhotonNetwork.OfflineMode;
-                
+
                 if (!isOfflineMode && photonView != null && photonView.Owner != null)
                     playerName = photonView.Owner.NickName;
                 else
@@ -107,7 +120,7 @@ namespace Hanzo.Player.Core
                 isOfflineMode = true;
                 playerName = "Player (Offline)";
             }
-            
+
             if (isOfflineMode)
                 Debug.Log("[PlayerHealth] Running in OFFLINE mode");
         }
@@ -117,8 +130,9 @@ namespace Hanzo.Player.Core
         /// </summary>
         private bool IsLocalPlayer()
         {
-            if (isOfflineMode) return true;
-            
+            if (isOfflineMode)
+                return true;
+
             try
             {
                 return photonView != null && photonView.IsMine;
@@ -134,8 +148,9 @@ namespace Hanzo.Player.Core
         /// </summary>
         private int GetActorNumber()
         {
-            if (isOfflineMode) return -1;
-            
+            if (isOfflineMode)
+                return -1;
+
             try
             {
                 return photonView?.Owner?.ActorNumber ?? -1;
@@ -151,8 +166,9 @@ namespace Hanzo.Player.Core
         /// </summary>
         private string GetPlayerName()
         {
-            if (isOfflineMode) return playerName;
-            
+            if (isOfflineMode)
+                return playerName;
+
             try
             {
                 return photonView?.Owner?.NickName ?? playerName;
@@ -163,30 +179,49 @@ namespace Hanzo.Player.Core
             }
         }
 
-        public void TakeDamage(float damageAmount, GameObject damageSource = null, 
-            DamageType damageType = DamageType.Generic)
+        public void TakeDamage(
+            float damageAmount,
+            GameObject damageSource = null,
+            DamageType damageType = DamageType.Generic
+        )
         {
-            if (!IsLocalPlayer()) return;
-            if (isDead) return;
+            if (!IsLocalPlayer())
+                return;
+            if (isDead)
+                return;
 
-            // Apply damage
+            // Apply damage FIRST
             currentHealth -= damageAmount;
             currentHealth = Mathf.Max(0, currentHealth);
 
-            Debug.Log($"[PlayerHealth] {GetPlayerName()} took {damageAmount} damage from {damageType}. Health: {currentHealth}/{maxHealth}");
+            Debug.Log(
+                $"[PlayerHealth] {GetPlayerName()} took {damageAmount} damage from {damageType}. Health: {currentHealth}/{maxHealth}"
+            );
 
-            // Handle hit counter
+            // Only increment hit counter for Dash damage (not all damage types)
             int hitsTaken = 0;
-            if (isOfflineMode)
+            if (damageType == DamageType.Dash)
             {
-                offlineHitsTaken++;
-                hitsTaken = offlineHitsTaken;
+                if (isOfflineMode)
+                {
+                    offlineHitsTaken++;
+                    hitsTaken = offlineHitsTaken;
+                }
+                else if (scoreManager != null)
+                {
+                    int actorNum = GetActorNumber();
+                    if (actorNum >= 0)
+                        hitsTaken = scoreManager.IncrementPlayerHits(actorNum);
+                }
             }
-            else if (scoreManager != null)
+            else
             {
-                int actorNum = GetActorNumber();
-                if (actorNum >= 0)
-                    hitsTaken = scoreManager.IncrementPlayerHits(actorNum);
+                // Get current hit count without incrementing
+                hitsTaken = isOfflineMode
+                    ? offlineHitsTaken
+                    : (
+                        scoreManager != null ? scoreManager.GetPlayerHitsTaken(GetActorNumber()) : 0
+                    );
             }
 
             // Handle score changes based on damage type (online only)
@@ -194,13 +229,19 @@ namespace Hanzo.Player.Core
             {
                 PhotonView sourceView = damageSource.GetComponent<PhotonView>();
 
-                if (sourceView != null && sourceView.Owner != null && 
-                    photonView.Owner != null && sourceView.Owner != photonView.Owner)
+                if (
+                    sourceView != null
+                    && sourceView.Owner != null
+                    && photonView.Owner != null
+                    && sourceView.Owner != photonView.Owner
+                )
                 {
                     if (damageType == DamageType.Dash)
                     {
                         scoreManager.AddDashHitScore(sourceView.Owner.ActorNumber);
-                        Debug.Log($"[PlayerHealth] 🎯 Score awarded to {sourceView.Owner.NickName}");
+                        Debug.Log(
+                            $"[PlayerHealth] 🎯 Score awarded to {sourceView.Owner.NickName}"
+                        );
                     }
                     else if (damageType == DamageType.Explosion)
                     {
@@ -220,20 +261,30 @@ namespace Hanzo.Player.Core
             // Sync damage to other clients (online only)
             if (!isOfflineMode && photonView != null)
             {
-                try { photonView.RPC("RPC_SyncHealthUpdate", RpcTarget.OthersBuffered, currentHealth); }
+                try
+                {
+                    photonView.RPC("RPC_SyncHealthUpdate", RpcTarget.OthersBuffered, currentHealth);
+                }
                 catch { }
             }
 
-            // Check for death
-            if (currentHealth <= 0 || hitsTaken >= 8)
+            // FIXED: Check for death based on health first, then hit count as backup
+            if (currentHealth <= 0)
             {
+                Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} died from health depletion!");
+                Die();
+            }
+            else if (damageType == DamageType.Dash && hitsTaken >= 8)
+            {
+                Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} died from 8 dash hits!");
                 Die();
             }
         }
 
         private void Die()
         {
-            if (isDead) return;
+            if (isDead)
+                return;
             isDead = true;
 
             Debug.Log($"[PlayerHealth] 💀 {GetPlayerName()} has died!");
@@ -259,7 +310,10 @@ namespace Hanzo.Player.Core
             // Sync death state (online only)
             if (!isOfflineMode && photonView != null)
             {
-                try { photonView.RPC("RPC_SyncDeathState", RpcTarget.AllBuffered); }
+                try
+                {
+                    photonView.RPC("RPC_SyncDeathState", RpcTarget.AllBuffered);
+                }
                 catch { }
             }
 
@@ -306,7 +360,8 @@ namespace Hanzo.Player.Core
 
         private void Respawn()
         {
-            if (!IsLocalPlayer()) return;
+            if (!IsLocalPlayer())
+                return;
 
             currentHealth = maxHealth;
             isDead = false;
@@ -334,7 +389,10 @@ namespace Hanzo.Player.Core
             // Sync respawn (online only)
             if (!isOfflineMode && photonView != null)
             {
-                try { photonView.RPC("RPC_SyncRespawn", RpcTarget.OthersBuffered, respawnPosition); }
+                try
+                {
+                    photonView.RPC("RPC_SyncRespawn", RpcTarget.OthersBuffered, respawnPosition);
+                }
                 catch { }
             }
         }
@@ -400,7 +458,8 @@ namespace Hanzo.Player.Core
         [PunRPC]
         private void RPC_SyncDeathState()
         {
-            if (IsLocalPlayer()) return;
+            if (IsLocalPlayer())
+                return;
 
             isDead = true;
             DisablePlayer();
@@ -410,7 +469,8 @@ namespace Hanzo.Player.Core
         [PunRPC]
         private void RPC_SyncRespawn(Vector3 position)
         {
-            if (IsLocalPlayer()) return;
+            if (IsLocalPlayer())
+                return;
 
             isDead = false;
             currentHealth = maxHealth;
@@ -428,17 +488,20 @@ namespace Hanzo.Player.Core
 
         private void OnGUI()
         {
-            if (!showDebugInfo || !IsLocalPlayer()) return;
+            if (!showDebugInfo || !IsLocalPlayer())
+                return;
 
             GUILayout.BeginArea(new Rect(10, 770, 300, 140));
             GUILayout.Label("=== PLAYER HEALTH ===");
             GUILayout.Label($"Mode: {(isOfflineMode ? "OFFLINE" : "ONLINE")}");
             GUILayout.Label($"Health: {currentHealth}/{maxHealth}");
 
-            int hitsTaken = isOfflineMode ? offlineHitsTaken : 
-                (scoreManager != null ? scoreManager.GetPlayerHitsTaken(GetActorNumber()) : 0);
-            int deaths = isOfflineMode ? offlineDeaths : 
-                (scoreManager != null ? scoreManager.GetPlayerDeaths(GetActorNumber()) : 0);
+            int hitsTaken = isOfflineMode
+                ? offlineHitsTaken
+                : (scoreManager != null ? scoreManager.GetPlayerHitsTaken(GetActorNumber()) : 0);
+            int deaths = isOfflineMode
+                ? offlineDeaths
+                : (scoreManager != null ? scoreManager.GetPlayerDeaths(GetActorNumber()) : 0);
 
             GUILayout.Label($"Hits Taken: {hitsTaken}/8");
             GUILayout.Label($"Deaths: {deaths}");

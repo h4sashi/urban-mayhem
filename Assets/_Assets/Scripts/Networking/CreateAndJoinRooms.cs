@@ -31,9 +31,10 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
         // Generate a random nickname if not set
         if (string.IsNullOrEmpty(PhotonNetwork.NickName))
         {
-            PhotonNetwork.NickName = "Player" + Random.Range(1000, 9999);
+            PhotonNetwork.NickName = PlayerPrefs.GetString("USERNAME");
+            Debug.Log($"[CreateAndJoinRooms] Setting player nickname to: {PhotonNetwork.NickName}");
         }
-        
+
         PhotonNetwork.AutomaticallySyncScene = true;
 
         if (!PhotonNetwork.IsConnected)
@@ -71,7 +72,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
             IsVisible = true,
             IsOpen = true,
         };
-        
+
         Debug.Log($"[CreateAndJoinRooms] Creating room '{roomName}' (maxPlayers={maxPlayers})");
         feedbackText?.SetText($"Creating room '{roomName}'...");
         PhotonNetwork.CreateRoom(roomName, roomOptions, TypedLobby.Default);
@@ -102,7 +103,9 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     public override void OnJoinedRoom()
     {
         Room room = PhotonNetwork.CurrentRoom;
-        Debug.Log($"[CreateAndJoinRooms] OnJoinedRoom: {room.Name} ({room.PlayerCount}/{room.MaxPlayers})");
+        Debug.Log(
+            $"[CreateAndJoinRooms] OnJoinedRoom: {room.Name} ({room.PlayerCount}/{room.MaxPlayers})"
+        );
         feedbackText?.SetText($"Joined Room: {room.Name}");
 
         // Load level for all players in the room (requires AutomaticallySyncScene true)
@@ -118,7 +121,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     {
         Debug.LogError($"[CreateAndJoinRooms] CreateRoomFailed: ({returnCode}) {message}");
         feedbackText?.SetText($"Create room failed: {message}");
-        
+
         // Common error: Room already exists
         if (returnCode == 32766) // Room already exists
         {
@@ -131,7 +134,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     {
         Debug.LogError($"[CreateAndJoinRooms] JoinRoomFailed: ({returnCode}) {message}");
         feedbackText?.SetText($"Join room failed: {message}");
-        
+
         // Common error: Room doesn't exist
         if (returnCode == 32758) // Room not found
         {
@@ -154,14 +157,18 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
         Room room = PhotonNetwork.CurrentRoom;
-        Debug.Log($"[CreateAndJoinRooms] Player entered: {newPlayer.NickName} ({room.PlayerCount}/{room.MaxPlayers})");
+        Debug.Log(
+            $"[CreateAndJoinRooms] Player entered: {newPlayer.NickName} ({room.PlayerCount}/{room.MaxPlayers})"
+        );
         feedbackText?.SetText($"Players: {room.PlayerCount}/{room.MaxPlayers}");
     }
 
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
         Room room = PhotonNetwork.CurrentRoom;
-        Debug.Log($"[CreateAndJoinRooms] Player left: {otherPlayer.NickName} ({room.PlayerCount}/{room.MaxPlayers})");
+        Debug.Log(
+            $"[CreateAndJoinRooms] Player left: {otherPlayer.NickName} ({room.PlayerCount}/{room.MaxPlayers})"
+        );
         feedbackText?.SetText($"Players: {room.PlayerCount}/{room.MaxPlayers}");
     }
 }

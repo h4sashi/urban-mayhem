@@ -7,13 +7,15 @@ using PlayFab.ClientModels;
 
 namespace Hanzo.Networking.PlayFab
 {
-    public class LoginManager : MonoBehaviour
+    public class PlayFabManager : MonoBehaviour
     {
+        public static PlayFabManager Instance { get; private set; }
+        
         public GameObject loginPanel;
         public GameObject signUp;
         
         [Header("Login Fields")]
-        public TMPro.TMP_InputField loginUsernameInput;
+        public TMPro.TMP_InputField loginEmailInput;
         public TMPro.TMP_InputField loginPasswordInput;
         
         [Header("Sign Up Fields")]
@@ -21,17 +23,37 @@ namespace Hanzo.Networking.PlayFab
         public TMPro.TMP_InputField signUpPasswordInput;
         
         [Header("Scene Management")]
-        public string nextSceneName = "MainGame"; // Scene to load after successful login
+        public string nextSceneName = "MainGame";
         
         [Header("UI Feedback (Optional)")]
-        public TMPro.TMP_Text statusText; // Optional: For displaying status messages
+        public TMPro.TMP_Text statusText;
+        
+        // Public properties to store player's display name and ID
+        public string PlayerDisplayName { get; set; }
+        public string PlayFabId { get; set; }
+        public string PlayerEmail { get; set; }
+        
+        private void Awake()
+        {
+            // Singleton pattern with DontDestroyOnLoad
+            if (Instance == null)
+            {
+                Instance = this;
+                DontDestroyOnLoad(gameObject);
+            }
+            else
+            {
+                Destroy(gameObject);
+                return;
+            }
+        }
         
         private void Start()
         {
             // Set PlayFab Title ID if not set in PlayFabSettings
             if (string.IsNullOrEmpty(PlayFabSettings.TitleId))
             {
-                PlayFabSettings.TitleId = "154756"; // Replace with your actual Title ID
+                PlayFabSettings.TitleId = "154756";
             }
         }
         
@@ -54,22 +76,22 @@ namespace Hanzo.Networking.PlayFab
             Debug.Log("Attempting Login...");
             UpdateStatus("Logging in...");
             
-            string username = loginUsernameInput.text.ToLower().Trim();
+            string email = loginEmailInput.text.ToLower().Trim();
             string password = loginPasswordInput.text;
             
-            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
             {
-                UpdateStatus("Username and password cannot be empty!");
+                UpdateStatus("Email and password cannot be empty!");
                 return;
             }
             
-            var request = new LoginWithPlayFabRequest
+            var request = new LoginWithEmailAddressRequest
             {
-                Username = username,
+                Email = email,
                 Password = password
             };
             
-            PlayFabClientAPI.LoginWithPlayFab(request, OnLoginSuccess, OnLoginFailure);
+            PlayFabClientAPI.LoginWithEmailAddress(request, OnLoginSuccess, OnLoginFailure);
         }
         
         public void SignUp()
@@ -98,7 +120,6 @@ namespace Hanzo.Networking.PlayFab
                 return;
             }
             
-            // Register with email only - username will be set in next scene
             var request = new RegisterPlayFabUserRequest
             {
                 Email = email,
@@ -114,7 +135,7 @@ namespace Hanzo.Networking.PlayFab
             Debug.Log("Attempting Account Recovery...");
             UpdateStatus("Password recovery...");
             
-            string email = loginUsernameInput.text.ToLower().Trim();
+            string email = loginEmailInput.text.ToLower().Trim();
             
             if (string.IsNullOrEmpty(email))
             {
@@ -131,10 +152,25 @@ namespace Hanzo.Networking.PlayFab
             PlayFabClientAPI.SendAccountRecoveryEmail(request, OnPasswordRecoverySuccess, OnPasswordRecoveryFailure);
         }
         
+        // Public method to get player profile info
+        public void GetPlayerProfile(System.Action<GetPlayerProfileResult> onSuccess, System.Action<PlayFabError> onFailure)
+        {
+            var request = new GetPlayerProfileRequest
+            {
+                ProfileConstraints = new PlayerProfileViewConstraints
+                {
+                    ShowDisplayName = true
+                }
+            };
+            
+            PlayFabClientAPI.GetPlayerProfile(request, onSuccess, onFailure);
+        }
+        
         // Success Callbacks
         private void OnLoginSuccess(LoginResult result)
         {
             Debug.Log("Login successful! PlayFab ID: " + result.PlayFabId);
+            PlayFabId = result.PlayFabId;
             UpdateStatus("Login successful!");
             LoadNextScene();
         }
@@ -142,8 +178,11 @@ namespace Hanzo.Networking.PlayFab
         private void OnRegisterSuccess(RegisterPlayFabUserResult result)
         {
             Debug.Log("Registration successful! PlayFab ID: " + result.PlayFabId);
-            // UpdateStatus("Account created! Please set your username.");
-            LoadNextScene(); // Load username setup scene
+            PlayFabId = result.PlayFabId;
+            PlayerEmail = signUpEmailInput.text.ToLower().Trim();
+            
+            UpdateStatus("Registration successful!");
+            LoadNextScene();
         }
         
         private void OnPasswordRecoverySuccess(SendAccountRecoveryEmailResult result)
@@ -179,7 +218,7 @@ namespace Hanzo.Networking.PlayFab
         
         private IEnumerator LoadSceneAsync()
         {
-            yield return new WaitForSeconds(1f); // Brief delay for user feedback
+            yield return new WaitForSeconds(1f);
             
             AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(nextSceneName);
             
