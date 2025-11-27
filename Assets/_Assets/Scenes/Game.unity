@@ -9230,8 +9230,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -16.512}
-  m_SizeDelta: {x: 731.06, y: 630.54}
+  m_AnchoredPosition: {x: 0, y: 40.510338}
+  m_SizeDelta: {x: 647.0272, y: 516.4953}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &195193555
 GameObject:
@@ -74824,6 +74824,7 @@ MonoBehaviour:
   justLogGameOver: 1
   submitToPlayFab: 1
   gameOverUI: {fileID: 1765590833}
+  countdownTimerObject: {fileID: 195183008}
 --- !u!114 &1765590832
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -74861,9 +74862,6 @@ MonoBehaviour:
   leaderboardPanel: {fileID: 195183008}
   leaderboardContent: {fileID: 1884450602}
   leaderboardRowPrefab: {fileID: 7932097681129491760, guid: 3eec618698a1b4bf58f097b3ed8fb6d7, type: 3}
-  positionTextTemplate: {fileID: 0}
-  usernameTextTemplate: {fileID: 0}
-  scoreTextTemplate: {fileID: 0}
   sortByScore: 1
   maxLeaderboardEntries: 10
   debugMode: 1
@@ -80939,7 +80937,7 @@ MonoBehaviour:
     m_Left: 0
     m_Right: 0
     m_Top: 0
-    m_Bottom: 0
+    m_Bottom: 327
   m_ChildAlignment: 0
   m_Spacing: 0
   m_ChildForceExpandWidth: 1

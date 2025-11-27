@@ -2,6 +2,7 @@ using UnityEngine;
 using TMPro;
 using Photon.Pun;
 using Photon.Realtime;
+using System.Linq;
 
 /// <summary>
 /// Photon-synchronized countdown timer that starts when room reaches max players.
@@ -28,6 +29,8 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
     [SerializeField] private bool justLogGameOver = true;
     [SerializeField] private bool submitToPlayFab = true;
     [SerializeField] private GameOverLeaderboardUI gameOverUI;
+
+    public GameObject countdownTimerObject;
     
     // Timer state
     private double startTime;
@@ -217,9 +220,6 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
 
         gameOverTriggered = true;
         
-        Debug.Log("========================================");
-        Debug.Log("           🎮 GAME OVER! 🎮            ");
-        Debug.Log("========================================");
         
         // RPC to all players to display leaderboard at the same time
         photonView.RPC("RPC_DisplayGameOver", RpcTarget.All);
@@ -257,6 +257,12 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         {
             gameOverUI.DisplayGameResults();
             Debug.Log("[Timer] Game Over UI displayed on all clients");
+
+            GameObject.FindGameObjectsWithTag("Player").ToList().ForEach(playerObj =>
+            {
+                playerObj.SetActive(false);
+                countdownTimerObject.SetActive(false);
+            });
         }
     }
 

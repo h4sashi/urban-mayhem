@@ -17,10 +17,10 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
     [Header("Row Template")]
     [SerializeField] private GameObject leaderboardRowPrefab;
     
-    [Header("Text Field References (in prefab)")]
-    [SerializeField] private TextMeshProUGUI positionTextTemplate;
-    [SerializeField] private TextMeshProUGUI usernameTextTemplate;
-    [SerializeField] private TextMeshProUGUI scoreTextTemplate;
+   
+    private TextMeshProUGUI positionTextTemplate;
+     private TextMeshProUGUI usernameTextTemplate;
+     private TextMeshProUGUI scoreTextTemplate;
     
     [Header("Settings")]
     [SerializeField] private bool sortByScore = true;
