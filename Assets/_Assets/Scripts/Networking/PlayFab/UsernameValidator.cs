@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Hanzo.Core;
 using PlayFab;
 using PlayFab.ClientModels;
 using TMPro;
@@ -63,6 +64,11 @@ namespace Hanzo.Networking.PlayFab
                 if (playerProfileNameText != null)
                 {
                     playerProfileNameText.text = displayName;
+                    StartCoroutine(
+                        GameObject
+                            .FindAnyObjectByType<ShopManager>()
+                            .FetchPlayerData(displayName)
+                    );
                     PlayerPrefs.SetString("USERNAME", displayName);
                 }
 
@@ -143,6 +149,11 @@ namespace Hanzo.Networking.PlayFab
             {
                 playerProfileNameText.text = result.DisplayName;
                 PlayerPrefs.SetString("USERNAME", result.DisplayName);
+                StartCoroutine(
+                    GameObject
+                        .FindAnyObjectByType<ShopManager>()
+                        .FetchPlayerData(result.DisplayName)
+                );
             }
 
             UpdateStatus("Username set successfully!");

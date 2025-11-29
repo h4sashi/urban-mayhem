@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -10,6 +11,7 @@ namespace Hanzo.Core
     {
         [Header("Menu References")]
         public Button[] menuButtons;
+        public Volume cameraPostProcessVolume;
 
         [Header("Shop References")]
         public Button backToMenuButton;
@@ -26,9 +28,10 @@ namespace Hanzo.Core
         {
             shopPanel.SetActive(true);
             backToMenuButton.gameObject.SetActive(true);
+            cameraPostProcessVolume.enabled = true;
             foreach (var button in menuButtons)
             {
-                button.gameObject.SetActive(false);
+                button.enabled = false;
             }
         }
 
@@ -36,9 +39,10 @@ namespace Hanzo.Core
         {
             shopPanel.SetActive(false);
             backToMenuButton.gameObject.SetActive(false);
+              cameraPostProcessVolume.enabled = false;
             foreach (var button in menuButtons)
             {
-                button.gameObject.SetActive(true);
+               button.enabled = true;
             }
         }
 
