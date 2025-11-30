@@ -56470,10 +56470,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerPrefab:
-  - {fileID: 3546674311411568189, guid: 2264f8220cfa94033bcf3c670b71640c, type: 3}
-  - {fileID: 3546674311411568189, guid: b8bda47d6362b428b85acb63766abf78, type: 3}
   - {fileID: 5229929404236885346, guid: 864745e5010f645debb898cb6b5711fe, type: 3}
+  - {fileID: 3546674311411568189, guid: 2264f8220cfa94033bcf3c670b71640c, type: 3}
   - {fileID: 3440846199098326780, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
+  - {fileID: 3546674311411568189, guid: b8bda47d6362b428b85acb63766abf78, type: 3}
   spawnRadius: 20
   obstacleMask:
     serializedVersion: 2

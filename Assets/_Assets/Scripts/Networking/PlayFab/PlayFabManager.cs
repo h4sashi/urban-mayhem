@@ -33,6 +33,8 @@ namespace Hanzo.Networking.PlayFab
         public string PlayFabId { get; set; }
         public string PlayerEmail { get; set; }
 
+        public bool useDefaultLogin = false;
+
         private void Awake()
         {
             // Singleton pattern with DontDestroyOnLoad
@@ -57,7 +59,7 @@ namespace Hanzo.Networking.PlayFab
         void OnDisable()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
-            // PlayerPrefs.DeleteAll();
+            PlayerPrefs.DeleteAll();
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -75,6 +77,11 @@ namespace Hanzo.Networking.PlayFab
             if (string.IsNullOrEmpty(PlayFabSettings.TitleId))
             {
                 PlayFabSettings.TitleId = "154756";
+            }
+
+            if (useDefaultLogin == true)
+            {
+                DefaultLogin();
             }
         }
 
@@ -109,6 +116,27 @@ namespace Hanzo.Networking.PlayFab
             var request = new LoginWithEmailAddressRequest { Email = email, Password = password };
 
             PlayFabClientAPI.LoginWithEmailAddress(request, OnLoginSuccess, OnLoginFailure);
+        }
+
+        public void DefaultLogin()
+        {
+                 Debug.Log("Attempting Default Login...");
+            UpdateStatus("Logging in...");
+            string _email = "hanzohxh@gmail.com";
+            string _password = "123456";
+            string email = _email.ToLower().Trim();
+            string password = _password;
+
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+            {
+                UpdateStatus("Email and password cannot be empty!");
+                return;
+            }
+
+            var request = new LoginWithEmailAddressRequest { Email = email, Password = password };
+
+            PlayFabClientAPI.LoginWithEmailAddress(request, OnLoginSuccess, OnLoginFailure);
+       
         }
 
         public void SignUp()

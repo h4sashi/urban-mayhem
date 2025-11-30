@@ -9,7 +9,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     [Header("UI")]
     public TMP_InputField CreateRoomInputField;
     public TMP_InputField JoinRoomInputField;
-    public TextMeshProUGUI feedbackText;
+    public TextMeshProUGUI feedbackText; 
 
     [Header("Options")]
     [SerializeField]
@@ -17,6 +17,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
 
     [SerializeField]
     private string gameVersion = "1.0";
+
 
     [Header("Game Scene")]
     [SerializeField]

@@ -22,6 +22,9 @@ namespace Hanzo.Networking.Utils
         public bool spawnOnJoinedRoom = true; // automatically spawn when joining room
         public bool spawnAtTransformIfFail = true; // use this transform position if no valid spot found
 
+        // Character selection key (matches ShopManager and CharacterSelector)
+        private const string SELECTED_CHARACTER_PREF_KEY = "SelectedCharacterIndex";
+
         // Start is called before the first frame update
         void Start()
         {
@@ -52,9 +55,9 @@ namespace Hanzo.Networking.Utils
                 return;
             }
 
-            if (playerPrefab == null)
+            if (playerPrefab == null || playerPrefab.Length == 0)
             {
-                Debug.LogError("[Spawner] playerPrefab is not assigned!");
+                Debug.LogError("[Spawner] playerPrefab array is not assigned or empty!");
                 return;
             }
 
@@ -80,8 +83,35 @@ namespace Hanzo.Networking.Utils
                 }
             }
 
-            int prefabIndex = Random.Range(0, playerPrefab.Length);
-            string resourceName = playerPrefab[prefabIndex].gameObject.name;
+            // Get selected character index from PlayerPrefs
+            int selectedIndex = GetSelectedCharacterIndex();
+            
+            // Validate index
+            if (selectedIndex < 0 || selectedIndex >= playerPrefab.Length)
+            {
+                Debug.LogWarning(
+                    $"[Spawner] Selected character index {selectedIndex} is out of range. " +
+                    $"Available prefabs: {playerPrefab.Length}. Defaulting to 0."
+                );
+                selectedIndex = 0;
+            }
+
+            // Ensure the prefab at the selected index is not null
+            if (playerPrefab[selectedIndex] == null)
+            {
+                Debug.LogError($"[Spawner] Player prefab at index {selectedIndex} is null! Using index 0.");
+                selectedIndex = 0;
+                
+                if (playerPrefab[0] == null)
+                {
+                    Debug.LogError("[Spawner] Default prefab (index 0) is also null! Cannot spawn.");
+                    return;
+                }
+            }
+
+            string resourceName = playerPrefab[selectedIndex].name;
+            Debug.Log($"[Spawner] Spawning selected character: {resourceName} (index: {selectedIndex})");
+
             GameObject player = PhotonNetwork.Instantiate(
                 resourceName,
                 spawnPos,
@@ -89,12 +119,37 @@ namespace Hanzo.Networking.Utils
                 0
             );
 
-            
-
             // Fix position immediately after spawn
             StartCoroutine(StabilizePlayerPosition(player, spawnPos));
 
-            Debug.Log("[Spawner] Spawned player at " + spawnPos);
+            Debug.Log($"[Spawner] Spawned player '{resourceName}' at {spawnPos}");
+        }
+
+        /// <summary>
+        /// Get the selected character index from PlayerPrefs
+        /// </summary>
+        private int GetSelectedCharacterIndex()
+        {
+            int index = PlayerPrefs.GetInt(SELECTED_CHARACTER_PREF_KEY, 0);
+            Debug.Log($"[Spawner] Retrieved selected character index: {index}");
+            return index;
+        }
+
+        /// <summary>
+        /// Optional: Manually set which character to spawn (useful for testing)
+        /// </summary>
+        public void SetSelectedCharacterIndex(int index)
+        {
+            if (index >= 0 && index < playerPrefab.Length)
+            {
+                PlayerPrefs.SetInt(SELECTED_CHARACTER_PREF_KEY, index);
+                PlayerPrefs.Save();
+                Debug.Log($"[Spawner] Set selected character index to: {index}");
+            }
+            else
+            {
+                Debug.LogError($"[Spawner] Invalid character index: {index}. Available: 0-{playerPrefab.Length - 1}");
+            }
         }
 
         private System.Collections.IEnumerator StabilizePlayerPosition(
@@ -183,5 +238,28 @@ namespace Hanzo.Networking.Utils
             Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.2f);
             Gizmos.DrawWireSphere(transform.position, clearRadius);
         }
+
+#if UNITY_EDITOR
+        [ContextMenu("Show Current Selected Character")]
+        private void ShowSelectedCharacter()
+        {
+            int index = GetSelectedCharacterIndex();
+            if (index >= 0 && index < playerPrefab.Length && playerPrefab[index] != null)
+            {
+                Debug.Log($"[Spawner] Currently selected character: {playerPrefab[index].name} (index: {index})");
+            }
+            else
+            {
+                Debug.Log($"[Spawner] Selected index: {index} (Invalid or out of range)");
+            }
+        }
+
+        [ContextMenu("Reset to Default Character (0)")]
+        private void ResetToDefaultCharacter()
+        {
+            SetSelectedCharacterIndex(0);
+            Debug.Log("[Spawner] Reset to default character (index 0)");
+        }
+#endif
     }
 }

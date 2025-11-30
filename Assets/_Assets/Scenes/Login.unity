@@ -81479,6 +81479,7 @@ MonoBehaviour:
   signUpPasswordInput: {fileID: 1804882744}
   nextSceneName: Main
   statusText: {fileID: 484982200}
+  useDefaultLogin: 1
 --- !u!4 &1947710856
 Transform:
   m_ObjectHideFlags: 0

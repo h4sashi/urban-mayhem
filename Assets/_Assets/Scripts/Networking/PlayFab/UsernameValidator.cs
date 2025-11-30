@@ -21,6 +21,8 @@ namespace Hanzo.Networking.PlayFab
         public TMPro.TMP_Text statusText;
         public TextMeshProUGUI playerProfileNameText;
 
+        [HideInInspector]public string currentUsername;
+
         [Header("Settings")]
         public int minUsernameLength = 3;
         public int maxUsernameLength = 20;
@@ -64,6 +66,7 @@ namespace Hanzo.Networking.PlayFab
                 if (playerProfileNameText != null)
                 {
                     playerProfileNameText.text = displayName;
+                    currentUsername = displayName;
                     StartCoroutine(
                         GameObject
                             .FindAnyObjectByType<ShopManager>()
@@ -148,6 +151,8 @@ namespace Hanzo.Networking.PlayFab
             if (playerProfileNameText != null)
             {
                 playerProfileNameText.text = result.DisplayName;
+                currentUsername = result.DisplayName;
+                
                 PlayerPrefs.SetString("USERNAME", result.DisplayName);
                 StartCoroutine(
                     GameObject
