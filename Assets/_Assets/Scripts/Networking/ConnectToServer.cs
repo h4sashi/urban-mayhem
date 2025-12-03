@@ -1,10 +1,19 @@
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using Photon.Pun;
 using Photon.Realtime;
+using TMPro;
 
 public class ConnectToServer : MonoBehaviourPunCallbacks
 {
+
+    public TextMeshProUGUI maxPlayerText;
+    public Scrollbar scrollbar;
+
+
+
+
     void Start()
     {
         // Set game version BEFORE connecting
