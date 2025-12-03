@@ -15637,7 +15637,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0.17812203, y: -2.66617e-15, z: 4.8262153e-16, w: 0.98400843}
-  m_LocalPosition: {x: -8.313002, y: 5.18, z: -6.8753986}
+  m_LocalPosition: {x: 4.41, y: 12.66, z: -104.17}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -90707,6 +90707,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: -4789290840028588720, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
+      propertyPath: hurtFX
+      value: 
+      objectReference: {fileID: 8300000, guid: 298172e66740040f09483220ecbdf176, type: 3}
     - target: {fileID: 840914440463902871, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
       propertyPath: useMobileControls
       value: 0
@@ -90729,8 +90733,20 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3440846199098326780, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 3870763029448719908, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
+      propertyPath: dashSFX
+      value: 
+      objectReference: {fileID: 8300000, guid: 2dbd0a32e748f426a92dda74e2a5afcf, type: 3}
+    - target: {fileID: 3870763029448719908, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
+      propertyPath: hitSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 5878c832958a84267a83ff6055c86f72, type: 3}
+    - target: {fileID: 3870763029448719908, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
+      propertyPath: destructibleHitSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 6e14ce764820b4048945ff6e640a793f, type: 3}
     - target: {fileID: 4239014622185724494, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
       propertyPath: m_LocalPosition.y
       value: 3.045454
@@ -90794,6 +90810,10 @@ PrefabInstance:
     - target: {fileID: 5093165476566827169, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6855569408268052908, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
+      propertyPath: stunSFXVolume
+      value: 0.9
       objectReference: {fileID: 0}
     - target: {fileID: 6855569408268052908, guid: fd9ce83ad11be4024b19b38018f86aaf, type: 3}
       propertyPath: groundLayer.m_Bits

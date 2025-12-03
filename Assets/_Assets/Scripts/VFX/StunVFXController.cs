@@ -38,10 +38,14 @@ namespace Hanzo.VFX
         
         // Properties
         public bool IsStunVFXActive => isStunVFXActive;
+
+        private AudioSource audioSource;
+        public AudioClip stunFX;
         
         private void Awake()
         {
             photonView = GetComponent<PhotonView>();
+            audioSource = GetComponent<AudioSource>();
             
             // Cache renderers and original colors for tinting
             CacheRendererColors();

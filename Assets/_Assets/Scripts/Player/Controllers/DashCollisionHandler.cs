@@ -55,6 +55,10 @@ namespace Hanzo.Player.Controllers
         private GameObject destructibleHitVFXPrefab;
 
         [SerializeField]
+        private AudioClip dashSFX;
+        private bool hasPlayedDashSound = false;
+
+        [SerializeField]
         private AudioClip hitSound;
 
         [SerializeField]
@@ -112,6 +116,8 @@ namespace Hanzo.Player.Controllers
             DiagnoseLayerConfiguration();
         }
 
+       
+
         private void DiagnoseLayerConfiguration()
         {
             Debug.Log($"[{name}] ========== LAYER CONFIGURATION ==========");
@@ -142,6 +148,17 @@ namespace Hanzo.Player.Controllers
             {
                 framesSinceDashActive++;
 
+                // Play dash SFX on the first frame of dash
+                if (framesSinceDashActive == 1 && !hasPlayedDashSound)
+                {
+                    if (dashSFX != null && audioSource != null)
+                    {
+                        audioSource.PlayOneShot(dashSFX, 0.45f);
+                        Debug.Log($"[{name}] 🔊 Playing dash SFX");
+                    }
+                    hasPlayedDashSound = true;
+                }
+
                 if (verboseLogging && framesSinceDashActive % 5 == 0)
                 {
                     Debug.Log($"[{name}] 🏃 Dash Active (Frame {framesSinceDashActive})");
@@ -159,6 +176,7 @@ namespace Hanzo.Player.Controllers
                         Debug.Log($"[{name}] ⏹️ Dash ended after {framesSinceDashActive} frames");
                     }
                     framesSinceDashActive = 0;
+                    hasPlayedDashSound = false; // Reset for next dash
                 }
             }
         }

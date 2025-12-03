@@ -1,11 +1,13 @@
 using System.Collections;
 using Cinemachine;
+using Hanzo.Audio;
 using Hanzo.Core.Interfaces;
 using Hanzo.Networking;
 using Hanzo.Player.Controllers;
 using Photon.Pun;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Hanzo.Player.Core
 {
@@ -19,6 +21,11 @@ namespace Hanzo.Player.Core
         [SerializeField]
         private float currentHealth = 8f;
 
+        public Image damageOverlay;
+        public float fadeOverlaySpeed = 2f;
+        public Color damageColor = Color.red;
+        public Image healthUIFill;
+
         [Header("Respawn Settings")]
         [SerializeField]
         private float respawnDelay = 3f;
@@ -26,12 +33,6 @@ namespace Hanzo.Player.Core
         [SerializeField]
         private Vector3 respawnPosition = Vector3.zero;
 
-        [Header("Damage Settings")]
-        [SerializeField]
-        private float dashDamage = 1f;
-
-        [SerializeField]
-        private float explosionDamage = 1f;
 
         [Header("Camera Settings")]
         [SerializeField]
@@ -60,12 +61,16 @@ namespace Hanzo.Player.Core
         private NetworkedScoreManager scoreManager;
         private bool isDead = false;
         private Coroutine respawnCoroutine;
+        private Coroutine damageOverlayCoroutine; // Track overlay coroutine
 
         // Offline compatibility
         private bool isOfflineMode = false;
         private int offlineHitsTaken = 0;
         private int offlineDeaths = 0;
         private string playerName = "Player";
+
+        [Header("Audio Settings")]
+        public AudioManager audioManager;
 
         private void Awake()
         {
@@ -74,6 +79,20 @@ namespace Hanzo.Player.Core
 
             if (respawnUI != null)
                 respawnUI.SetActive(false);
+
+            // FIXED: Initialize damage overlay to transparent
+            if (damageOverlay != null)
+            {
+                Color transparent = damageColor;
+                transparent.a = 0f;
+                damageOverlay.color = transparent;
+                damageOverlay.enabled = true; // Ensure it's enabled
+                Debug.Log("[PlayerHealth] Damage overlay initialized (transparent)");
+            }
+            else
+            {
+                Debug.LogWarning("[PlayerHealth] ⚠️ Damage overlay Image not assigned!");
+            }
 
             // Check offline mode
             CheckOfflineMode();
@@ -98,6 +117,41 @@ namespace Hanzo.Player.Core
                     Debug.LogWarning(
                         "[PlayerHealth] NetworkedScoreManager not found (OK if offline)"
                     );
+            }
+
+            InitSound();
+        }
+
+        private void InitSound()
+        {
+            if (audioManager.audioSource == null)
+            {
+                foreach (var t_child in this.GetComponentsInChildren<AudioSource>())
+                {
+                    if (t_child.gameObject.name == "StunAudioSource")
+                    {
+                        audioManager.audioSource = t_child;
+                        break;
+                    }
+                }
+            }
+
+            // Configure 3D spatial audio with distance-based falloff
+            if (audioManager.audioSource != null)
+            {
+                audioManager.audioSource.playOnAwake = false;
+                audioManager.audioSource.spatialBlend = 1f; // Full 3D sound
+                audioManager.audioSource.rolloffMode = audioManager.audioRolloffMode;
+                audioManager.audioSource.minDistance = audioManager.audioMinDistance;
+                audioManager.audioSource.maxDistance = audioManager.audioMaxDistance;
+                audioManager.audioSource.dopplerLevel = 0f; // Disable doppler for gameplay sounds
+                Debug.Log(
+                    $"[PlayerHealth] AudioSource configured: Min={audioManager.audioMinDistance}m, Max={audioManager.audioMaxDistance}m, Rolloff={audioManager.audioRolloffMode}"
+                );
+            }
+            else
+            {
+                Debug.LogWarning("[PlayerHealth] AudioSource not found!");
             }
         }
 
@@ -179,6 +233,98 @@ namespace Hanzo.Player.Core
             }
         }
 
+        /// <summary>
+        /// Shows damage overlay only for the local player
+        /// </summary>
+        private void ShowDamageOverlay()
+        {
+            if (!IsLocalPlayer())
+                return;
+
+            if (damageOverlay == null)
+            {
+                Debug.LogWarning("[PlayerHealth] Cannot show damage overlay - Image is null!");
+                return;
+            }
+
+            // Stop existing overlay animation if running
+            if (damageOverlayCoroutine != null)
+            {
+                StopCoroutine(damageOverlayCoroutine);
+            }
+            
+            // Start new overlay animation
+            damageOverlayCoroutine = StartCoroutine(FadeDamageOverlay());
+        }
+
+        /// <summary>
+        /// FIXED: Shows damage overlay at full intensity, then fades out
+        /// </summary>
+        IEnumerator FadeDamageOverlay()
+        {
+            // FLASH: Set overlay to full visibility first
+            float maxAlpha = damageColor.a; // Use the alpha from damageColor as max
+            damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, maxAlpha);
+            
+            Debug.Log($"[PlayerHealth] 🩸 Damage overlay flashed (alpha: {maxAlpha}) for local player");
+
+            // Small delay at full intensity for impact
+            yield return new WaitForSeconds(0.1f);
+
+            // FADE: Gradually fade out
+            float alpha = maxAlpha;
+            while (alpha > 0f)
+            {
+                alpha -= Time.deltaTime * fadeOverlaySpeed;
+                alpha = Mathf.Max(0f, alpha); // Clamp to 0
+                damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, alpha);
+                yield return null;
+            }
+
+            // Ensure fully transparent at end
+            damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, 0f);
+            Debug.Log("[PlayerHealth] Damage overlay faded out");
+        }
+
+        /// <summary>
+        /// Plays hurt sound effect locally and syncs to network
+        /// </summary>
+        private void PlayHurtSound()
+        {
+            if (audioManager.audioClip != null && audioManager.audioSource != null)
+            {
+                audioManager.audioSource.PlayOneShot(audioManager.audioClip, 0.8f);
+                Debug.Log($"[PlayerHealth] 🔊 Playing hurt SFX (Local)");
+            }
+
+            // Sync sound to other players
+            if (!isOfflineMode && photonView != null)
+            {
+                try
+                {
+                    photonView.RPC("RPC_PlayHurtSound", RpcTarget.Others);
+                }
+                catch { }
+            }
+        }
+
+        private IEnumerator DelayedPlayHurtSound(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            PlayHurtSound();
+        }
+
+        [PunRPC]
+        private void RPC_PlayHurtSound()
+        {
+            // Remote players hear the sound with distance-based attenuation
+            if (audioManager.audioClip != null && audioManager.audioSource != null)
+            {
+                audioManager.audioSource.PlayOneShot(audioManager.audioClip, 0.8f);
+                Debug.Log($"[PlayerHealth] 🔊 Playing hurt SFX (Remote)");
+            }
+        }
+
         public void TakeDamage(
             float damageAmount,
             GameObject damageSource = null,
@@ -197,6 +343,22 @@ namespace Hanzo.Player.Core
             Debug.Log(
                 $"[PlayerHealth] {GetPlayerName()} took {damageAmount} damage from {damageType}. Health: {currentHealth}/{maxHealth}"
             );
+
+            // FIXED: Show damage overlay and play sound when damage is taken
+            if (damageAmount > 0)
+            {
+                // Show overlay only for local player
+                ShowDamageOverlay();
+                
+                // Play hurt sound with delay
+                StartCoroutine(DelayedPlayHurtSound(0.95f));
+            }
+
+            // Update health UI fill if assigned
+            if (healthUIFill != null)
+            {
+                healthUIFill.fillAmount = currentHealth / maxHealth;
+            }
 
             // Only increment hit counter for Dash damage (not all damage types)
             int hitsTaken = 0;
@@ -382,6 +544,20 @@ namespace Hanzo.Player.Core
             EnablePlayer();
             EnableCamera();
 
+            // Reset health UI
+            if (healthUIFill != null)
+            {
+                healthUIFill.fillAmount = 1f;
+            }
+
+            // Clear damage overlay
+            if (damageOverlay != null)
+            {
+                Color transparent = damageColor;
+                transparent.a = 0f;
+                damageOverlay.color = transparent;
+            }
+
             Debug.Log($"[PlayerHealth] 🔄 {GetPlayerName()} respawned!");
 
             OnPlayerRespawned?.Invoke();
@@ -484,6 +660,9 @@ namespace Hanzo.Player.Core
         {
             if (respawnCoroutine != null)
                 StopCoroutine(respawnCoroutine);
+            
+            if (damageOverlayCoroutine != null)
+                StopCoroutine(damageOverlayCoroutine);
         }
 
         private void OnGUI()

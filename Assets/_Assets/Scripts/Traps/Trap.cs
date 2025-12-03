@@ -1,9 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
+using Hanzo.Audio;
 using Hanzo.Core.Interfaces;
 using Hanzo.Core.Utilities;
-using UnityEngine;
 using Photon.Pun;
+using UnityEngine;
 
 namespace Hanzo.Traps
 {
@@ -13,7 +14,7 @@ namespace Hanzo.Traps
         TimedDetonation,
     }
 
-    public class Trap : MonoBehaviour
+    public class Trap : MonoBehaviourPun
     {
         [Header("Trap Settings")]
         public TrapType trapType = TrapType.CollisionDetonation;
@@ -56,9 +57,24 @@ namespace Hanzo.Traps
         public float currentCountdown = 0f;
         private bool countdownActive = false;
 
-        // PHOTON MULTIPLAYER: Track indicators per player
-        private Dictionary<Transform, PlayerIndicatorData> playerIndicators = 
+        private Dictionary<Transform, PlayerIndicatorData> playerIndicators =
             new Dictionary<Transform, PlayerIndicatorData>();
+
+        [Header("Audio Settings")]
+        public AudioManager audioManager;
+        
+        [Tooltip("Doppler effect intensity (0 = disabled, 1 = realistic physics)")]
+        [Range(0f, 5f)]
+        public float audioDopplerLevel = 0f;
+
+        // Track the original audio source reference (before detaching)
+        private AudioSource originalAudioSource;
+        private GameObject originalAudioObject;
+
+        // MOBILE OPTIMIZATION: Cache static player references to avoid repeated FindObjectsOfType
+        private static List<PlayerIndicatorData> cachedPlayers = new List<PlayerIndicatorData>();
+        private static float lastPlayerCacheTime = -999f;
+        private const float PLAYER_CACHE_REFRESH_INTERVAL = 2f; // Refresh every 2 seconds if needed
 
         private class PlayerIndicatorData
         {
@@ -72,7 +88,8 @@ namespace Hanzo.Traps
         void Start()
         {
             rb = GetComponent<Rigidbody>();
-            FindAllPlayers();
+            RegisterWithCachedPlayers();
+            InitSound();
         }
 
         void Update()
@@ -85,32 +102,105 @@ namespace Hanzo.Traps
                     StopVFX();
             }
 
-            // Check all players for proximity
             if (trapType == TrapType.TimedDetonation && countdownActive && showDamageIndicator)
             {
                 CheckAllPlayersForIndicators();
             }
         }
 
-        /// <summary>
-        /// ONLINE & OFFLINE: Find all players and their indicator managers
-        /// </summary>
-        private void FindAllPlayers()
+        private void InitSound()
         {
-            playerIndicators.Clear();
+            if (audioManager.audioSource == null)
+            {
+                foreach (var t_child in this.GetComponentsInChildren<AudioSource>())
+                {
+                    if (t_child.gameObject.name == "StunAudioSource")
+                    {
+                        audioManager.audioSource = t_child;
+                        break;
+                    }
+                }
+            }
 
-            // Try ONLINE mode first (Photon Network)
+            // Store reference to original audio components
+            if (audioManager.audioSource != null)
+            {
+                originalAudioSource = audioManager.audioSource;
+                originalAudioObject = audioManager.audioSource.gameObject;
+
+                audioManager.audioSource.playOnAwake = false;
+                audioManager.audioSource.spatialBlend = 1f;
+                audioManager.audioSource.rolloffMode = audioManager.audioRolloffMode;
+                audioManager.audioSource.minDistance = audioManager.audioMinDistance;
+                audioManager.audioSource.maxDistance = audioManager.audioMaxDistance;
+                audioManager.audioSource.dopplerLevel = audioDopplerLevel;
+            }
+        }
+
+        private void PlayDetonationSound()
+        {
+            if (PhotonNetwork.IsConnected && photonView != null)
+            {
+                photonView.RPC("RPC_PlayDetonationSound", RpcTarget.All);
+            }
+            else
+            {
+                PlayDetonationSoundLocal();
+            }
+        }
+
+        [PunRPC]
+        private void RPC_PlayDetonationSound()
+        {
+            PlayDetonationSoundLocal();
+        }
+
+        private void PlayDetonationSoundLocal()
+        {
+            if (audioManager.audioSource != null && audioManager.audioClip != null)
+            {
+                // Create a temporary GameObject for the sound at the explosion position
+                GameObject tempAudioObj = new GameObject("TrapExplosionSound");
+                tempAudioObj.transform.position = transform.position;
+                
+                // Add and configure AudioSource
+                AudioSource tempAudioSource = tempAudioObj.AddComponent<AudioSource>();
+                tempAudioSource.clip = audioManager.audioClip;
+                tempAudioSource.spatialBlend = 1f;
+                tempAudioSource.rolloffMode = audioManager.audioRolloffMode;
+                tempAudioSource.minDistance = audioManager.audioMinDistance;
+                tempAudioSource.maxDistance = audioManager.audioMaxDistance;
+                tempAudioSource.dopplerLevel = audioDopplerLevel;
+                tempAudioSource.volume = audioManager.audioSource.volume;
+                tempAudioSource.pitch = audioManager.audioSource.pitch;
+                
+                // Play the sound
+                tempAudioSource.Play();
+                
+                // Destroy the temporary audio object after the clip finishes
+                float clipLength = audioManager.audioClip.length;
+                Destroy(tempAudioObj, clipLength + 0.1f);
+            }
+        }
+
+        /// <summary>
+        /// MOBILE OPTIMIZED: Uses static cache to avoid repeated FindObjectsOfType calls
+        /// </summary>
+        private static void RefreshPlayerCache()
+        {
+            cachedPlayers.Clear();
+            
+            // Try online players first
             PhotonView[] allPhotonViews = FindObjectsOfType<PhotonView>();
             bool foundOnlinePlayer = false;
-            
+
             foreach (PhotonView pv in allPhotonViews)
             {
-                // Look for local player only (each client handles their own indicators)
                 if (pv.IsMine && pv.CompareTag("Player"))
                 {
-                    // Find the DamageIndicatorManager under this player's hierarchy
-                    DamageIndicatorManager manager = pv.GetComponentInChildren<DamageIndicatorManager>();
-                    
+                    DamageIndicatorManager manager =
+                        pv.GetComponentInChildren<DamageIndicatorManager>();
+
                     if (manager != null && manager.IsLocalPlayerManager())
                     {
                         PlayerIndicatorData data = new PlayerIndicatorData
@@ -119,25 +209,25 @@ namespace Hanzo.Traps
                             manager = manager,
                             indicator = null,
                             isShown = false,
-                            maxRangeSqr = manager.maxTrackingDistance * manager.maxTrackingDistance
+                            maxRangeSqr = manager.maxTrackingDistance * manager.maxTrackingDistance,
                         };
-                        
-                        playerIndicators[pv.transform] = data;
+
+                        cachedPlayers.Add(data);
                         foundOnlinePlayer = true;
-                        Debug.Log($"[Trap] ONLINE - Registered player {pv.ViewID} for damage indicators");
                     }
                 }
             }
 
-            // If no online players found, try OFFLINE mode
+            // Fallback to offline mode
             if (!foundOnlinePlayer)
             {
                 GameObject[] allPlayers = GameObject.FindGameObjectsWithTag("Player");
-                
+
                 foreach (GameObject playerObj in allPlayers)
                 {
-                    DamageIndicatorManager manager = playerObj.GetComponentInChildren<DamageIndicatorManager>();
-                    
+                    DamageIndicatorManager manager =
+                        playerObj.GetComponentInChildren<DamageIndicatorManager>();
+
                     if (manager != null)
                     {
                         PlayerIndicatorData data = new PlayerIndicatorData
@@ -146,20 +236,64 @@ namespace Hanzo.Traps
                             manager = manager,
                             indicator = null,
                             isShown = false,
-                            maxRangeSqr = manager.maxTrackingDistance * manager.maxTrackingDistance
+                            maxRangeSqr = manager.maxTrackingDistance * manager.maxTrackingDistance,
                         };
-                        
-                        playerIndicators[playerObj.transform] = data;
-                        Debug.Log($"[Trap] OFFLINE - Registered player {playerObj.name} for damage indicators");
+
+                        cachedPlayers.Add(data);
                     }
                 }
             }
 
+            lastPlayerCacheTime = Time.time;
+        }
+
+        /// <summary>
+        /// MOBILE OPTIMIZED: Registers this trap with cached player list instead of searching
+        /// </summary>
+        private void RegisterWithCachedPlayers()
+        {
+            playerIndicators.Clear();
+
+            // Refresh cache if it's empty or stale
+            if (cachedPlayers.Count == 0 || Time.time - lastPlayerCacheTime > PLAYER_CACHE_REFRESH_INTERVAL)
+            {
+                RefreshPlayerCache();
+            }
+
+            // Copy cached player data to this trap's dictionary
+            foreach (var cachedData in cachedPlayers)
+            {
+                // Validate references are still valid
+                if (cachedData.playerTransform == null || cachedData.manager == null)
+                    continue;
+
+                // Create new instance for this trap
+                PlayerIndicatorData data = new PlayerIndicatorData
+                {
+                    playerTransform = cachedData.playerTransform,
+                    manager = cachedData.manager,
+                    indicator = null,
+                    isShown = false,
+                    maxRangeSqr = cachedData.maxRangeSqr,
+                };
+
+                playerIndicators[cachedData.playerTransform] = data;
+            }
+
+            // If still no players found, schedule a retry
             if (playerIndicators.Count == 0)
             {
-                // Retry if no players found yet
-                Invoke(nameof(FindAllPlayers), 0.5f);
+                Invoke(nameof(RegisterWithCachedPlayers), 0.5f);
             }
+        }
+
+        /// <summary>
+        /// DEPRECATED: Use RegisterWithCachedPlayers instead for better performance
+        /// Kept for backwards compatibility but redirects to optimized method
+        /// </summary>
+        private void FindAllPlayers()
+        {
+            RegisterWithCachedPlayers();
         }
 
         public void SetTrapHandler(TrapHandler handler)
@@ -167,12 +301,15 @@ namespace Hanzo.Traps
             trapHandler = handler;
         }
 
+        /// <summary>
+        /// MOBILE OPTIMIZED: Reuses cached player references on respawn
+        /// </summary>
         public void ResetTrap()
         {
             hasDetonated = false;
             countdownActive = false;
-            
-            // Clear all player indicators
+
+            // Hide indicators from all players
             foreach (var data in playerIndicators.Values)
             {
                 if (data.isShown && data.manager != null)
@@ -180,12 +317,24 @@ namespace Hanzo.Traps
                     data.manager.HideIndicator(transform);
                 }
             }
-            playerIndicators.Clear();
-            
+
+            // OPTIMIZED: Reuse cached players instead of FindObjectsOfType
+            RegisterWithCachedPlayers();
+
             if (spawnedVFX != null)
             {
                 Destroy(spawnedVFX);
                 spawnedVFX = null;
+            }
+
+            // Restore original audio source reference
+            if (originalAudioSource != null && originalAudioObject != null)
+            {
+                audioManager.audioSource = originalAudioSource;
+            }
+            else
+            {
+                InitSound();
             }
         }
 
@@ -206,13 +355,11 @@ namespace Hanzo.Traps
             countdownActive = true;
             currentCountdown = detonationDelay;
 
-            // Check immediately if any players are in range
             if (showDamageIndicator)
             {
                 CheckAllPlayersForIndicators();
             }
 
-            // Wait before shake
             float waitTime = detonationDelay - shakeDuration;
             float elapsed = 0f;
 
@@ -223,65 +370,71 @@ namespace Hanzo.Traps
                 yield return null;
             }
 
-            // Shake phase
             currentCountdown = shakeDuration;
             yield return StartCoroutine(ShakeEffect(shakeDuration));
 
             Detonate();
         }
 
-        /// <summary>
-        /// PHOTON: Check all registered players for proximity
-        /// </summary>
         void CheckAllPlayersForIndicators()
         {
-            // Clean up any destroyed players first
-            List<Transform> toRemove = new List<Transform>();
+            // Clean up null references
+            List<Transform> toRemove = null; // Lazy allocation
+
             foreach (var kvp in playerIndicators)
             {
                 if (kvp.Key == null || kvp.Value.playerTransform == null)
                 {
+                    if (toRemove == null)
+                        toRemove = new List<Transform>();
                     toRemove.Add(kvp.Key);
                 }
             }
-            foreach (var key in toRemove)
+
+            if (toRemove != null)
             {
-                playerIndicators.Remove(key);
+                foreach (var key in toRemove)
+                {
+                    playerIndicators.Remove(key);
+                }
             }
 
-            // Check each player's distance
+            // If no players, attempt recovery using cached data
+            if (playerIndicators.Count == 0)
+            {
+                RegisterWithCachedPlayers();
+                return;
+            }
+
             foreach (var data in playerIndicators.Values)
             {
                 if (data.playerTransform == null || data.manager == null)
                     continue;
 
-                float distanceSqr = (transform.position - data.playerTransform.position).sqrMagnitude;
+                float distanceSqr = (
+                    transform.position - data.playerTransform.position
+                ).sqrMagnitude;
 
                 if (distanceSqr <= data.maxRangeSqr && !data.isShown)
                 {
-                    // Player entered range - show indicator
                     data.manager.ShowIndicator(transform, currentCountdown);
-                    
+
                     var activeIndicators = data.manager.GetActiveIndicators();
                     if (activeIndicators.TryGetValue(transform, out DamageIndicator indicator))
                     {
                         data.indicator = indicator;
                     }
-                    
+
                     data.isShown = true;
-                    Debug.Log($"[Trap] Showing indicator for player at distance: {Mathf.Sqrt(distanceSqr):F1}m");
                 }
                 else if (distanceSqr > data.maxRangeSqr && data.isShown)
                 {
-                    // Player left range - hide indicator
                     data.manager.HideIndicator(transform);
                     data.indicator = null;
                     data.isShown = false;
-                    Debug.Log($"[Trap] Hiding indicator - player out of range: {Mathf.Sqrt(distanceSqr):F1}m");
                 }
                 else if (data.isShown && data.indicator != null)
                 {
-                    // Update existing indicator
                     data.indicator.UpdateRemainingTime(currentCountdown);
                 }
             }
@@ -340,7 +493,8 @@ namespace Hanzo.Traps
             hasDetonated = true;
             countdownActive = false;
 
-            // Hide indicators for all players
+            PlayDetonationSound();
+
             if (showDamageIndicator)
             {
                 foreach (var data in playerIndicators.Values)
@@ -414,8 +568,6 @@ namespace Hanzo.Traps
                     float damageAmount = damage * (1 - (distance / blastRadius));
                     damageAmount = Mathf.Max(0.5f, damageAmount);
                     damageable.TakeDamage(damageAmount, gameObject, DamageType.Explosion);
-
-                    Debug.Log($"[Trap] 💣 Dealt {damageAmount} explosion damage to {col.name}");
                 }
             }
         }
@@ -430,6 +582,15 @@ namespace Hanzo.Traps
         {
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(transform.position, blastRadius);
+        }
+
+        /// <summary>
+        /// Call this when a player joins/leaves to force cache refresh
+        /// </summary>
+        public static void InvalidatePlayerCache()
+        {
+            cachedPlayers.Clear();
+            lastPlayerCacheTime = -999f;
         }
     }
 }

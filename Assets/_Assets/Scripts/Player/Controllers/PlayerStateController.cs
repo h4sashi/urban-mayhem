@@ -53,6 +53,26 @@ namespace Hanzo.Player.Controllers
         [SerializeField]
         private float fallDamageMultiplier = 10f;
 
+        [Header("Audio Settings")]
+        [SerializeField]
+        private AudioClip stunSFX;
+
+        [SerializeField]
+        [Range(0f, 1f)]
+        private float stunSFXVolume = 0.7f;
+
+        [Tooltip("Distance at which sound starts to fade (full volume within this range)")]
+        [SerializeField]
+        private float audioMinDistance = 5f;
+
+        [Tooltip("Distance at which sound becomes inaudible")]
+        [SerializeField]
+        private float audioMaxDistance = 25f;
+
+        [Tooltip("How sound fades with distance (Logarithmic = realistic, Linear = gradual)")]
+        [SerializeField]
+        private AudioRolloffMode audioRolloffMode = AudioRolloffMode.Logarithmic;
+
         [Header("Debug")]
         [SerializeField]
         private bool showDebugInfo = false;
@@ -72,6 +92,7 @@ namespace Hanzo.Player.Controllers
         private Rigidbody rb;
         private Animator animator;
         private StunVFXController vfxController;
+        [SerializeField]private AudioSource audioSource;
 
         // Offline compatibility
         private bool isOfflineMode = false;
@@ -102,6 +123,29 @@ namespace Hanzo.Player.Controllers
             rb = GetComponent<Rigidbody>();
             animator = GetComponentInChildren<Animator>(true);
             vfxController = GetComponent<StunVFXController>();
+
+           
+            if (audioSource == null)
+            {
+                foreach (var t_child in this.GetComponentsInChildren<AudioSource>())
+                {
+                    if (t_child.gameObject.name == "StunAudioSource")
+                    {
+                        audioSource = t_child;
+                        break;
+                    }
+                }
+            }
+            
+            // Configure 3D spatial audio with distance-based falloff
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 1f; // Full 3D sound
+            audioSource.rolloffMode = audioRolloffMode;
+            audioSource.minDistance = audioMinDistance;
+            audioSource.maxDistance = audioMaxDistance;
+            audioSource.dopplerLevel = 0f; // Disable doppler for gameplay sounds
+            
+            Debug.Log($"[{name}] AudioSource configured: Min={audioMinDistance}m, Max={audioMaxDistance}m, Rolloff={audioRolloffMode}");
 
             // Check if we're in offline mode
             CheckOfflineMode();
@@ -271,9 +315,6 @@ namespace Hanzo.Player.Controllers
             }
         }
 
-        // CRITICAL FIXES for PlayerStateController.cs
-        // Replace the ExitFallingState() and EnterFallingState() methods with these versions:
-
         private void EnterFallingState()
         {
             isFalling = true;
@@ -336,21 +377,6 @@ namespace Hanzo.Player.Controllers
                     photonView.RPC("RPC_SyncFallingState", RpcTarget.OthersBuffered, false);
                 }
                 catch { }
-            }
-        }
-
-        // REMOVE the SetGroundedAfterFrame() coroutine - it's no longer needed
-        // DELETE this entire method from your code:
-        // private IEnumerator SetGroundedAfterFrame() { ... }
-
-        private IEnumerator SetGroundedAfterFrame()
-        {
-            // Wait one frame to ensure animator processes FALLING = false
-            yield return null;
-
-            if (animator != null)
-            {
-                animator.SetBool(GroundedHash, true);
             }
         }
 
@@ -422,6 +448,9 @@ namespace Hanzo.Player.Controllers
                 vfxController.ShowStunVFX();
             }
 
+            // Play stun sound locally
+            PlayStunSound();
+
             float originalDrag = rb.drag;
             rb.drag = knockbackDrag;
 
@@ -480,6 +509,28 @@ namespace Hanzo.Player.Controllers
             }
         }
 
+        /// <summary>
+        /// Plays stun sound effect locally and syncs to network
+        /// </summary>
+        private void PlayStunSound()
+        {
+            if (stunSFX != null && audioSource != null)
+            {
+                audioSource.PlayOneShot(stunSFX, stunSFXVolume);
+                Debug.Log($"[{name}] 🔊 Playing stun SFX (Local)");
+            }
+
+            // Sync sound to other players
+            if (!isOfflineMode && photonView != null)
+            {
+                try
+                {
+                    photonView.RPC("RPC_PlayStunSound", RpcTarget.Others);
+                }
+                catch { }
+            }
+        }
+
         private float GetAnimationLength(string stateName)
         {
             if (animator == null)
@@ -494,6 +545,20 @@ namespace Hanzo.Player.Controllers
                     return clip.length;
             }
             return 0f;
+        }
+
+        // ============================================
+        // PHOTON RPCs
+        // ============================================
+
+        [PunRPC]
+        private void RPC_PlayStunSound()
+        {
+            if (stunSFX != null && audioSource != null)
+            {
+                audioSource.PlayOneShot(stunSFX, stunSFXVolume);
+                Debug.Log($"[{name}] 🔊 Playing stun SFX (Remote)");
+            }
         }
 
         [PunRPC]
