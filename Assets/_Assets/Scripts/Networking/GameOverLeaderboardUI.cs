@@ -25,7 +25,7 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
     [Header("Settings")]
     [SerializeField] private bool sortByScore = true;
     [SerializeField] private int maxLeaderboardEntries = 10;
-    [SerializeField] private bool debugMode = true;
+    [SerializeField] private bool debugMode = false;
     
     private void Start()
     {

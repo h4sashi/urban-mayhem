@@ -224,6 +224,12 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         // RPC to all players to display leaderboard at the same time
         photonView.RPC("RPC_DisplayGameOver", RpcTarget.All);
         
+        GameObject.FindGameObjectsWithTag("Player").ToList().ForEach(playerObj =>
+        {
+            playerObj.SetActive(false);
+            countdownTimerObject.SetActive(false);
+        });
+        
         // NEW: Submit scores to PlayFab (only local player submits their own stats)
         if (submitToPlayFab && Hanzo.Networking.PlayFabLeaderboardManager.Instance != null)
         {

@@ -6,6 +6,7 @@ using Photon.Pun;
 using Photon.Realtime;
 using UnityEngine;
 using ExitGames.Client.Photon;
+using UnityEngine.SceneManagement;
 
 namespace Hanzo.Networking
 {
@@ -32,6 +33,24 @@ namespace Hanzo.Networking
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
+        }
+
+        void OnEnable()
+        {
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        void OnDisable()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if(scene.name == "Main")
+            {
+                Destroy(gameObject);
+            }
         }
 
         /// <summary>
@@ -228,6 +247,17 @@ namespace Hanzo.Networking
                 error => Debug.LogError($"[Leaderboard] Failed to get leaderboard: {error.GenerateErrorReport()}")
             );
         }
+
+        public void BackToLobby()
+        {
+            PhotonNetwork.LeaveRoom();
+            PhotonNetwork.LoadLevel("Main");
+        }
+
+
+
+
+
     }
 
     /// <summary>
