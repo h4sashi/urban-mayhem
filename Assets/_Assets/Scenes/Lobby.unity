@@ -1664,7 +1664,7 @@ MonoBehaviour:
   CreateRoomInputField: {fileID: 1213418945}
   JoinRoomInputField: {fileID: 478619705}
   feedbackText: {fileID: 1445860108}
-  maxPlayers: 2
+  defaultMaxPlayers: 2
   gameVersion: 1.0
   gameSceneName: Game
 --- !u!1 &723264727
@@ -2915,6 +2915,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxPlayerText: {fileID: 387141304}
   scrollbar: {fileID: 1708329280}
+  minPlayers: 2
+  maxPlayers: 9
 --- !u!4 &1713238325
 Transform:
   m_ObjectHideFlags: 0

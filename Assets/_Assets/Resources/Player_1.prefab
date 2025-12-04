@@ -4220,13 +4220,19 @@ MonoBehaviour:
   fadeOverlaySpeed: 2
   damageColor: {r: 1, g: 0, b: 0, a: 1}
   healthUIFill: {fileID: 2178471464113668316}
+  healthBarSmoothSpeed: 5
+  healthBarHighColor: {r: 0, g: 1, b: 0, a: 1}
+  healthBarMidColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  healthBarLowColor: {r: 1, g: 0, b: 0, a: 1}
+  animateHealthBar: 1
+  colorHealthBar: 1
   respawnDelay: 8
   respawnPosition: {x: 5.137163, y: 5.137163, z: -26.7}
   playerVirtualCamera: {fileID: 6766659135906768308}
   respawnUI: {fileID: 1455393818322020384}
   respawnCountdownText: {fileID: 5675579501033279544}
   mobielHUDCanvas: {fileID: 5501291232339902206}
-  showDebugInfo: 1
+  showDebugInfo: 0
   audioManager:
     audioClip: {fileID: 8300000, guid: 45536b2cfd15c41949266e7f185e5da6, type: 3}
     audioSource: {fileID: 0}

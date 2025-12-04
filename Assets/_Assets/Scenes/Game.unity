@@ -7001,7 +7001,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &157466308
 Transform:
   m_ObjectHideFlags: 0
@@ -45098,7 +45098,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1032432268
 Transform:
   m_ObjectHideFlags: 0
@@ -75171,6 +75171,9 @@ MonoBehaviour:
   submitToPlayFab: 1
   gameOverUI: {fileID: 1765590833}
   countdownTimerObject: {fileID: 195183008}
+  playables:
+  - {fileID: 157466307}
+  - {fileID: 1032432267}
 --- !u!114 &1765590832
 MonoBehaviour:
   m_ObjectHideFlags: 0

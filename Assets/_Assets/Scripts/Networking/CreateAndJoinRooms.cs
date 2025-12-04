@@ -9,15 +9,16 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
     [Header("UI")]
     public TMP_InputField CreateRoomInputField;
     public TMP_InputField JoinRoomInputField;
-    public TextMeshProUGUI feedbackText; 
+    public TextMeshProUGUI feedbackText;
 
     [Header("Options")]
     [SerializeField]
-    private byte maxPlayers = 2;
+    private byte defaultMaxPlayers = 2; // Fallback value if PlayerPrefs not set
+    
+    private byte maxPlayers; // Will be loaded from PlayerPrefs
 
     [SerializeField]
     private string gameVersion = "1.0";
-
 
     [Header("Game Scene")]
     [SerializeField]
@@ -25,6 +26,13 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
 
     void Start()
     {
+        // ========== LOAD MAX PLAYERS FROM PLAYERPREFS ==========
+        // This value was set by the scrollbar in ConnectToServer scene
+        maxPlayers = (byte)PlayerPrefs.GetInt("RoomMaxPlayers", defaultMaxPlayers);
+        maxPlayers = (byte)Mathf.Clamp(maxPlayers, 2, 9); // Safety clamp (2-9 players)
+        
+        Debug.Log($"[CreateAndJoinRooms] Max players loaded from PlayerPrefs: {maxPlayers}");
+        
         // Basic safety: ensure Photon connected
         PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "us"; // or "eu", "asia", etc.
         PhotonNetwork.GameVersion = gameVersion;
@@ -69,13 +77,13 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
 
         RoomOptions roomOptions = new RoomOptions
         {
-            MaxPlayers = maxPlayers,
+            MaxPlayers = maxPlayers, // Uses the value loaded from PlayerPrefs
             IsVisible = true,
             IsOpen = true,
         };
 
         Debug.Log($"[CreateAndJoinRooms] Creating room '{roomName}' (maxPlayers={maxPlayers})");
-        feedbackText?.SetText($"Creating room '{roomName}'...");
+        feedbackText?.SetText($"Creating room '{roomName}' ({maxPlayers} players)...");
         PhotonNetwork.CreateRoom(roomName, roomOptions, TypedLobby.Default);
     }
 
@@ -107,7 +115,7 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
         Debug.Log(
             $"[CreateAndJoinRooms] OnJoinedRoom: {room.Name} ({room.PlayerCount}/{room.MaxPlayers})"
         );
-        feedbackText?.SetText($"Joined Room: {room.Name}");
+        feedbackText?.SetText($"Joined Room: {room.Name} ({room.PlayerCount}/{room.MaxPlayers})");
 
         // Load level for all players in the room (requires AutomaticallySyncScene true)
         if (PhotonNetwork.IsMasterClient)

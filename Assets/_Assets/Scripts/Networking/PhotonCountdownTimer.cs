@@ -1,8 +1,8 @@
-using UnityEngine;
-using TMPro;
+using System.Linq;
 using Photon.Pun;
 using Photon.Realtime;
-using System.Linq;
+using TMPro;
+using UnityEngine;
 
 /// <summary>
 /// Photon-synchronized countdown timer that starts when room reaches max players.
@@ -11,27 +11,49 @@ using System.Linq;
 public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
 {
     [Header("UI")]
-    [SerializeField] private TextMeshProUGUI timerText;
-    [SerializeField] private UnityEngine.UI.Image radialFillImage;
-    
+    [SerializeField]
+    private TextMeshProUGUI timerText;
+
+    [SerializeField]
+    private UnityEngine.UI.Image radialFillImage;
+
     [Header("Radial Fill Settings")]
-    [SerializeField] private bool invertFill = false;
-    [SerializeField] private Color fillStartColor = Color.green;
-    [SerializeField] private Color fillMiddleColor = Color.yellow;
-    [SerializeField] private Color fillEndColor = Color.red;
-    [SerializeField] private bool useColorGradient = true;
-    
+    [SerializeField]
+    private bool invertFill = false;
+
+    [SerializeField]
+    private Color fillStartColor = Color.green;
+
+    [SerializeField]
+    private Color fillMiddleColor = Color.yellow;
+
+    [SerializeField]
+    private Color fillEndColor = Color.red;
+
+    [SerializeField]
+    private bool useColorGradient = true;
+
     [Header("Timer Settings")]
-    [SerializeField] private float countdownDuration = 60f;
-    
+    [SerializeField]
+    private float countdownDuration = 60f;
+
     [Header("Game Over Settings")]
-    [SerializeField] private string gameOverSceneName = "GameOver";
-    [SerializeField] private bool justLogGameOver = true;
-    [SerializeField] private bool submitToPlayFab = true;
-    [SerializeField] private GameOverLeaderboardUI gameOverUI;
+    [SerializeField]
+    private string gameOverSceneName = "GameOver";
+
+    [SerializeField]
+    private bool justLogGameOver = true;
+
+    [SerializeField]
+    private bool submitToPlayFab = true;
+
+    [SerializeField]
+    private GameOverLeaderboardUI gameOverUI;
 
     public GameObject countdownTimerObject;
-    
+
+    public GameObject[] playables;
+
     // Timer state
     private double startTime;
     private bool countdownStarted = false;
@@ -40,15 +62,19 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
 
     void Start()
     {
+        SetGameObjects(false);
+        
         photonView = GetComponent<PhotonView>();
         if (photonView == null)
         {
-            Debug.LogError("[Timer] PhotonView not found! Add PhotonView component to this GameObject.");
+            Debug.LogError(
+                "[Timer] PhotonView not found! Add PhotonView component to this GameObject."
+            );
         }
-        
+
         UpdateTimerDisplay(countdownDuration);
         InitializeRadialFill();
-        
+
         if (PhotonNetwork.InRoom)
         {
             CheckIfShouldStartCountdown();
@@ -80,9 +106,9 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
 
         int minutes = Mathf.FloorToInt(timeInSeconds / 60f);
         int seconds = Mathf.FloorToInt(timeInSeconds % 60f);
-        
+
         timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
-        
+
         if (timeInSeconds <= 10f)
         {
             timerText.color = Color.red;
@@ -107,12 +133,12 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         radialFillImage.fillOrigin = (int)UnityEngine.UI.Image.Origin360.Top;
         radialFillImage.fillClockwise = true;
         radialFillImage.fillAmount = invertFill ? 1f : 0f;
-        
+
         if (useColorGradient)
         {
             radialFillImage.color = fillStartColor;
         }
-        
+
         Debug.Log("[Timer] Radial fill initialized");
     }
 
@@ -122,7 +148,7 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             return;
 
         float progress = 1f - (remainingTime / countdownDuration);
-        
+
         if (invertFill)
         {
             radialFillImage.fillAmount = 1f - progress;
@@ -140,9 +166,32 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             }
             else
             {
-                radialFillImage.color = Color.Lerp(fillMiddleColor, fillEndColor, (progress - 0.5f) * 2f);
+                radialFillImage.color = Color.Lerp(
+                    fillMiddleColor,
+                    fillEndColor,
+                    (progress - 0.5f) * 2f
+                );
             }
         }
+    }
+
+    private void SetGameObjects(bool value)
+    {
+        foreach (var gO in playables)
+        {
+            gO.SetActive(value);
+        }
+        Debug.Log($"[Timer] Playables set to: {value}");
+    }
+
+    /// <summary>
+    /// RPC: Activates playables on all clients simultaneously
+    /// </summary>
+    [PunRPC]
+    private void RPC_ActivatePlayables()
+    {
+        SetGameObjects(true);
+        Debug.Log("[Timer] Playables activated via RPC on all clients");
     }
 
     private void StartCountdown()
@@ -159,10 +208,13 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         startTime = PhotonNetwork.Time;
         countdownStarted = true;
 
+        // FIXED: Use RPC to activate playables on ALL clients
+        photonView.RPC("RPC_ActivatePlayables", RpcTarget.All);
+
         ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
         {
             { "CountdownStartTime", startTime },
-            { "CountdownStarted", true }
+            { "CountdownStarted", true },
         };
         PhotonNetwork.CurrentRoom.SetCustomProperties(props);
 
@@ -175,11 +227,13 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             return;
 
         Room room = PhotonNetwork.CurrentRoom;
-        
+
         if (room.PlayerCount >= room.MaxPlayers)
         {
-            Debug.Log($"[Timer] Room full! ({room.PlayerCount}/{room.MaxPlayers}) Starting countdown...");
-            
+            Debug.Log(
+                $"[Timer] Room full! ({room.PlayerCount}/{room.MaxPlayers}) Starting countdown..."
+            );
+
             if (PhotonNetwork.IsMasterClient && !countdownStarted)
             {
                 StartCountdown();
@@ -200,18 +254,26 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("CountdownStarted"))
         {
             bool started = (bool)PhotonNetwork.CurrentRoom.CustomProperties["CountdownStarted"];
-            
-            if (started && PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("CountdownStartTime"))
+
+            if (
+                started
+                && PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("CountdownStartTime")
+            )
             {
-                startTime = (double)PhotonNetwork.CurrentRoom.CustomProperties["CountdownStartTime"];
+                startTime = (double)
+                    PhotonNetwork.CurrentRoom.CustomProperties["CountdownStartTime"];
                 countdownStarted = true;
+                
+                // FIXED: When syncing, also activate playables for late joiners
+                SetGameObjects(true);
+                
                 Debug.Log("[Timer] Synced countdown from room properties");
             }
         }
     }
 
     /// <summary>
-    /// NEW: Triggers when countdown reaches zero - submits to PlayFab
+    /// Triggers when countdown reaches zero - submits to PlayFab
     /// </summary>
     private void TriggerGameOver()
     {
@@ -219,24 +281,30 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             return;
 
         gameOverTriggered = true;
-        
-        
+
         // RPC to all players to display leaderboard at the same time
         photonView.RPC("RPC_DisplayGameOver", RpcTarget.All);
+
+        GameObject
+            .FindGameObjectsWithTag("Player")
+            .ToList()
+            .ForEach(playerObj =>
+            {
+                playerObj.SetActive(false);
+            });
         
-        GameObject.FindGameObjectsWithTag("Player").ToList().ForEach(playerObj =>
+        if (countdownTimerObject != null)
         {
-            playerObj.SetActive(false);
             countdownTimerObject.SetActive(false);
-        });
-        
-        // NEW: Submit scores to PlayFab (only local player submits their own stats)
+        }
+
+        // Submit scores to PlayFab (only local player submits their own stats)
         if (submitToPlayFab && Hanzo.Networking.PlayFabLeaderboardManager.Instance != null)
         {
             Debug.Log("[Timer] Submitting game results to PlayFab...");
             Hanzo.Networking.PlayFabLeaderboardManager.Instance.SubmitGameResults();
         }
-        
+
         if (PhotonNetwork.IsMasterClient)
         {
             if (justLogGameOver)
@@ -246,13 +314,13 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             else
             {
                 Debug.Log($"[Timer] Game Over! Loading scene: {gameOverSceneName}");
-                
+
                 // Wait a moment before loading scene to allow PlayFab submissions
                 StartCoroutine(LoadSceneWithDelay());
             }
         }
     }
-    
+
     /// <summary>
     /// RPC: Called on all clients to display game over leaderboard simultaneously
     /// </summary>
@@ -264,11 +332,18 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             gameOverUI.DisplayGameResults();
             Debug.Log("[Timer] Game Over UI displayed on all clients");
 
-            GameObject.FindGameObjectsWithTag("Player").ToList().ForEach(playerObj =>
+            GameObject
+                .FindGameObjectsWithTag("Player")
+                .ToList()
+                .ForEach(playerObj =>
+                {
+                    playerObj.SetActive(false);
+                });
+            
+            if (countdownTimerObject != null)
             {
-                playerObj.SetActive(false);
                 countdownTimerObject.SetActive(false);
-            });
+            }
         }
     }
 
@@ -282,7 +357,9 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
-        Debug.Log($"[Timer] Player joined: {newPlayer.NickName} ({PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers})");
+        Debug.Log(
+            $"[Timer] Player joined: {newPlayer.NickName} ({PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers})"
+        );
         CheckIfShouldStartCountdown();
     }
 
@@ -293,7 +370,9 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         CheckIfShouldStartCountdown();
     }
 
-    public override void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
+    public override void OnRoomPropertiesUpdate(
+        ExitGames.Client.Photon.Hashtable propertiesThatChanged
+    )
     {
         if (propertiesThatChanged.ContainsKey("CountdownStarted") && !countdownStarted)
         {
@@ -303,7 +382,9 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
 
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
-        Debug.Log($"[Timer] Player left: {otherPlayer.NickName} ({PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers})");
+        Debug.Log(
+            $"[Timer] Player left: {otherPlayer.NickName} ({PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers})"
+        );
     }
 
     #endregion
