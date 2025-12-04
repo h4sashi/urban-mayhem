@@ -11677,7 +11677,7 @@ Canvas:
   m_GameObject: {fileID: 251124355}
   m_Enabled: 1
   serializedVersion: 3
-  m_RenderMode: 0
+  m_RenderMode: 1
   m_Camera: {fileID: 0}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
@@ -11705,6 +11705,7 @@ RectTransform:
   m_Children:
   - {fileID: 119396703}
   - {fileID: 195183009}
+  - {fileID: 769832442}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -26223,8 +26224,7 @@ RectTransform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 769832442}
+  m_Children: []
   m_Father: {fileID: 195183009}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -26246,9 +26246,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 0, g: 0.1839715, b: 0.49056602, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
+  m_Maskable: 0
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -26269,7 +26269,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 585932303}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!1001 &586854558
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -33749,12 +33749,12 @@ GameObject:
   - component: {fileID: 769832444}
   - component: {fileID: 769832443}
   m_Layer: 5
-  m_Name: Button
+  m_Name: LobbyButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &769832442
 RectTransform:
   m_ObjectHideFlags: 0
@@ -33762,17 +33762,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 769832441}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 310437984}
-  m_Father: {fileID: 585932304}
+  m_Father: {fileID: 251124359}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: -229.2728}
   m_SizeDelta: {x: 228.5648, y: 44.544}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &769832443
@@ -33819,8 +33819,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1765590834}
-        m_TargetAssemblyTypeName: Hanzo.Networking.PlayFabLeaderboardManager, Assembly-CSharp
+      - m_Target: {fileID: 1765590833}
+        m_TargetAssemblyTypeName: GameOverLeaderboardUI, Assembly-CSharp
         m_MethodName: BackToLobby
         m_Mode: 1
         m_Arguments:
@@ -33847,7 +33847,7 @@ MonoBehaviour:
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
+  m_Maskable: 0
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -33868,7 +33868,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 769832441}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!4 &770810840 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8656522925563801548, guid: d618707dc03cd0649a29d9fd2964a3d9, type: 3}
@@ -75170,7 +75170,7 @@ MonoBehaviour:
   justLogGameOver: 1
   submitToPlayFab: 1
   gameOverUI: {fileID: 1765590833}
-  countdownTimerObject: {fileID: 195183008}
+  countdownTimerObject: {fileID: 119396702}
   playables:
   - {fileID: 157466307}
   - {fileID: 1032432267}
@@ -75209,6 +75209,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   leaderboardPanel: {fileID: 195183008}
+  lobbyButton: {fileID: 769832441}
   leaderboardContent: {fileID: 1884450602}
   leaderboardRowPrefab: {fileID: 7932097681129491760, guid: 3eec618698a1b4bf58f097b3ed8fb6d7, type: 3}
   sortByScore: 1
@@ -91237,6 +91238,7 @@ SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 330585546}
+  - {fileID: 251124359}
   - {fileID: 410087041}
   - {fileID: 440199004}
   - {fileID: 71127084}
@@ -91263,5 +91265,4 @@ SceneRoots:
   - {fileID: 1272233592}
   - {fileID: 1534304789}
   - {fileID: 1765590830}
-  - {fileID: 251124359}
   - {fileID: 2080249875}

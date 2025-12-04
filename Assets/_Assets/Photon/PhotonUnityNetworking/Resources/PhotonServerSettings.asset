@@ -60,6 +60,7 @@ MonoBehaviour:
   - RPC_PlayStunSound
   - RPC_PlayHurtSound
   - RPC_PlayDetonationSound
+  - RPC_ActivatePlayables
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

@@ -248,11 +248,7 @@ namespace Hanzo.Networking
             );
         }
 
-        public void BackToLobby()
-        {
-            PhotonNetwork.LeaveRoom();
-            PhotonNetwork.LoadLevel("Main");
-        }
+        
 
 
 

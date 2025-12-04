@@ -115,7 +115,7 @@ MonoBehaviour:
   dtSpeed: 25
   affectedLayers:
     serializedVersion: 2
-    m_Bits: 192
+    m_Bits: 0
   detonationDelay: 0
   detonateOnCollision: 1
   shakeDuration: 1.5

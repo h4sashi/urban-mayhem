@@ -2573,7 +2573,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   stunDuration: 4
-  dashDamage: 1
+  dashDamage: 4
   detectionRadius: 2.45
   detectionOffset: {x: 0, y: 1.17, z: 0.5}
   destructibleForceMultiplier: 1.2
@@ -2870,6 +2870,12 @@ MonoBehaviour:
   fadeOverlaySpeed: 2
   damageColor: {r: 1, g: 0, b: 0, a: 1}
   healthUIFill: {fileID: 5092352052655632522}
+  healthBarSmoothSpeed: 5
+  healthBarHighColor: {r: 0, g: 1, b: 0, a: 1}
+  healthBarMidColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  healthBarLowColor: {r: 1, g: 0, b: 0, a: 1}
+  animateHealthBar: 1
+  colorHealthBar: 1
   respawnDelay: 10
   respawnPosition: {x: 5.137163, y: 3, z: -26.7}
   playerVirtualCamera: {fileID: 3590453764928966282}

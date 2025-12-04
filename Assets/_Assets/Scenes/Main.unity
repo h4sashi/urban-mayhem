@@ -5662,6 +5662,56 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!1 &788309550
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 788309552}
+  - component: {fileID: 788309551}
+  m_Layer: 0
+  m_Name: CharacterSelector
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &788309551
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 788309550}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5da2d09b5cb9c4221b41624e769f580d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  availableCharacters:
+  - {fileID: 3090317053298518918}
+  - {fileID: 4358550840057727711}
+  - {fileID: 4888574216353139377}
+  - {fileID: 1177235742221721328}
+  selectedCharacter: {fileID: 0}
+--- !u!4 &788309552
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 788309550}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &789088790
 GameObject:
   m_ObjectHideFlags: 0
@@ -6547,7 +6597,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &840338367
 RectTransform:
   m_ObjectHideFlags: 0
@@ -7744,7 +7794,6 @@ GameObject:
   - component: {fileID: 1180963017}
   - component: {fileID: 1180963016}
   - component: {fileID: 1180963018}
-  - component: {fileID: 1180963019}
   m_Layer: 0
   m_Name: SceneMgr
   m_TagString: Untagged
@@ -7830,24 +7879,6 @@ MonoBehaviour:
   - Afterburner
   - Side Sweep
   playerId: TestPlayer
---- !u!114 &1180963019
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1180963015}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5da2d09b5cb9c4221b41624e769f580d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  availableCharacters:
-  - {fileID: 3090317053298518918}
-  - {fileID: 4358550840057727711}
-  - {fileID: 4888574216353139377}
-  - {fileID: 1177235742221721328}
-  selectedCharacter: {fileID: 0}
 --- !u!1 &1190582115
 GameObject:
   m_ObjectHideFlags: 0
@@ -38015,3 +38046,4 @@ SceneRoots:
   - {fileID: 1718327450}
   - {fileID: 708456302}
   - {fileID: 1180963017}
+  - {fileID: 788309552}

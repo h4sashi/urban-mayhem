@@ -1,11 +1,12 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Hanzo.Core
 {
     public class CharacterSelector : MonoBehaviour
     {
         public static CharacterSelector Instance { get; private set; }
-        
+
         [Header("Character References")]
         public GameObject[] availableCharacters;
         public GameObject selectedCharacter;
@@ -13,22 +14,38 @@ namespace Hanzo.Core
         private const string SELECTED_CHARACTER_PREF_KEY = "SelectedCharacterIndex";
         private int currentSelectedIndex = 0;
 
-        private void Awake()
+        private void OnEnable()
         {
-            // Singleton pattern
-            if (Instance == null)
-            {
-                Instance = this;
-                DontDestroyOnLoad(gameObject);
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
+            SceneManager.sceneLoaded += OnSceneLoaded;
 
             // Load saved selection
             LoadSelectedCharacter();
+        }
+
+        private void OnDisable()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (scene.name == "Main")
+            {
+                // If we already have an instance and this is NOT that instance
+                if (Instance != null && Instance != this)
+                {
+                    // Destroy this new duplicate
+                    Destroy(gameObject);
+                    return;
+                }
+
+                // If there's no instance yet, make this the instance
+                if (Instance == null)
+                {
+                    Instance = this;
+                    DontDestroyOnLoad(gameObject);
+                }
+            }
         }
 
         private void Start()
@@ -53,12 +70,14 @@ namespace Hanzo.Core
         {
             if (characterIndex < 0 || characterIndex >= availableCharacters.Length)
             {
-                Debug.LogError($"❌ Invalid character index: {characterIndex}. Available characters: {availableCharacters.Length}");
+                Debug.LogError(
+                    $"❌ Invalid character index: {characterIndex}. Available characters: {availableCharacters.Length}"
+                );
                 return;
             }
 
             currentSelectedIndex = characterIndex;
-            
+
             // Save to PlayerPrefs
             PlayerPrefs.SetInt(SELECTED_CHARACTER_PREF_KEY, characterIndex);
             PlayerPrefs.Save();
@@ -82,7 +101,9 @@ namespace Hanzo.Core
 
             if (characterIndex < 0 || characterIndex >= availableCharacters.Length)
             {
-                Debug.LogWarning($"⚠️ Character index {characterIndex} out of range, defaulting to 0");
+                Debug.LogWarning(
+                    $"⚠️ Character index {characterIndex} out of range, defaulting to 0"
+                );
                 characterIndex = 0;
             }
 
@@ -107,10 +128,7 @@ namespace Hanzo.Core
             {
                 Debug.LogError($"❌ Character at index {characterIndex} is null!");
             }
-
         }
-
-      
 
         /// <summary>
         /// Get the currently selected character index
@@ -150,7 +168,9 @@ namespace Hanzo.Core
         {
             Debug.Log($"=== CHARACTER SELECTOR STATE ===");
             Debug.Log($"Current Index: {currentSelectedIndex}");
-            Debug.Log($"Selected Character: {(selectedCharacter ? selectedCharacter.name : "None")}");
+            Debug.Log(
+                $"Selected Character: {(selectedCharacter ? selectedCharacter.name : "None")}"
+            );
             Debug.Log($"Available Characters: {availableCharacters?.Length ?? 0}");
             Debug.Log($"================================");
         }

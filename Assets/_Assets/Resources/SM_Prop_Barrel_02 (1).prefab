@@ -348,11 +348,11 @@ MonoBehaviour:
   blastRadius: 13.85
   explosionForce: 44.8
   upwardModifier: 2.47
-  damage: 3.2
+  damage: 4
   dtSpeed: 10
   affectedLayers:
     serializedVersion: 2
-    m_Bits: 192
+    m_Bits: 0
   detonationDelay: 4
   detonateOnCollision: 1
   shakeDuration: 1.5

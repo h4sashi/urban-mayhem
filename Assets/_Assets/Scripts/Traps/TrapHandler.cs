@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Photon.Pun;
 using UnityEngine;
 
 namespace Hanzo.Traps
@@ -53,29 +54,22 @@ namespace Hanzo.Traps
         }
 
         GameObject GetTrapFromPool()
-        {
-            if (trapPool.Count > 0)
-            {
-                GameObject trap = trapPool.Dequeue();
-                return trap;
-            }
-            else
-            {
-                // Pool exhausted, create new trap
-                GameObject trap = Instantiate(trapPrefab);
-                trap.SetActive(false);
-
-                Trap trapScript = trap.GetComponent<Trap>();
-                if (trapScript != null)
-                {
-                    trapScript.enabled = false;
-                    trapScript.SetTrapHandler(this);
-                }
-
-                return trap;
-            }
-        }
-
+{
+    // Use PhotonNetwork.Instantiate instead of regular Instantiate
+    GameObject trap = PhotonNetwork.Instantiate(
+        trapPrefab.name, // Must match prefab name in Resources folder
+        Vector3.zero,
+        Quaternion.identity
+    );
+    
+    Trap trapScript = trap.GetComponent<Trap>();
+    if (trapScript != null)
+    {
+        trapScript.SetTrapHandler(this);
+    }
+    
+    return trap;
+}
         void ReturnTrapToPool(GameObject trap)
         {
             // Reset trap state

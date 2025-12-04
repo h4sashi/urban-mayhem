@@ -1,8 +1,9 @@
 using System.Collections.Generic;
-using UnityEngine;
-using TMPro;
-using Photon.Pun;
 using Hanzo.Networking;
+using Photon.Pun;
+using TMPro;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Displays game results on the Game Over screen
@@ -11,22 +12,33 @@ using Hanzo.Networking;
 public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
 {
     [Header("UI References")]
-    [SerializeField] private GameObject leaderboardPanel;
-    [SerializeField] private Transform leaderboardContent; // Parent for row prefabs
-    
+    [SerializeField]
+    private GameObject leaderboardPanel;
+
+    [SerializeField]
+    private GameObject lobbyButton;
+
+    [SerializeField]
+    private Transform leaderboardContent; // Parent for row prefabs
+
     [Header("Row Template")]
-    [SerializeField] private GameObject leaderboardRowPrefab;
-    
-   
+    [SerializeField]
+    private GameObject leaderboardRowPrefab;
+
     private TextMeshProUGUI positionTextTemplate;
-     private TextMeshProUGUI usernameTextTemplate;
-     private TextMeshProUGUI scoreTextTemplate;
-    
+    private TextMeshProUGUI usernameTextTemplate;
+    private TextMeshProUGUI scoreTextTemplate;
+
     [Header("Settings")]
-    [SerializeField] private bool sortByScore = true;
-    [SerializeField] private int maxLeaderboardEntries = 10;
-    [SerializeField] private bool debugMode = false;
-    
+    [SerializeField]
+    private bool sortByScore = true;
+
+    [SerializeField]
+    private int maxLeaderboardEntries = 10;
+
+    [SerializeField]
+    private bool debugMode = false;
+
     private void Start()
     {
         // Hide initially
@@ -34,8 +46,12 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
         {
             leaderboardPanel.SetActive(false);
         }
+        if (lobbyButton != null)
+        {
+            lobbyButton.SetActive(false);
+        }
     }
-    
+
     /// <summary>
     /// Called from PhotonCountdownTimer when game ends
     /// Displays the final scores
@@ -46,10 +62,14 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
         {
             leaderboardPanel.SetActive(true);
         }
-        
+        if (lobbyButton != null)
+        {
+            lobbyButton.SetActive(true);
+        }
+
         PopulateLeaderboard();
     }
-    
+
     /// <summary>
     /// Populate the leaderboard with current game results from Photon
     /// </summary>
@@ -60,62 +80,64 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
         {
             Destroy(child.gameObject);
         }
-        
+
         // Get all players and their scores
         List<PlayerLeaderboardEntry> entries = GetPlayerEntries();
-        
+
         // Sort by score (descending)
         if (sortByScore)
         {
             entries.Sort((a, b) => b.Score.CompareTo(a.Score));
         }
-        
+
         // Display top entries
         for (int i = 0; i < Mathf.Min(entries.Count, maxLeaderboardEntries); i++)
         {
             CreateLeaderboardRow(i + 1, entries[i]);
         }
-        
+
         if (debugMode)
         {
             Debug.Log($"[GameOverUI] Displayed {entries.Count} players on leaderboard");
         }
     }
-    
+
     /// <summary>
     /// Get all players from current room with their scores
     /// </summary>
     private List<PlayerLeaderboardEntry> GetPlayerEntries()
     {
         List<PlayerLeaderboardEntry> entries = new List<PlayerLeaderboardEntry>();
-        
+
         if (!PhotonNetwork.InRoom)
         {
             Debug.LogWarning("[GameOverUI] Not in a room!");
             return entries;
         }
-        
+
         foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
         {
             int score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber);
             int kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber);
             int deaths = NetworkedScoreManager.Instance.GetPlayerDeaths(player.ActorNumber);
             int hits = NetworkedScoreManager.Instance.GetPlayerHitsTaken(player.ActorNumber);
-            
-            entries.Add(new PlayerLeaderboardEntry
-            {
-                ActorNumber = player.ActorNumber,
-                Username = player.NickName,
-                Score = score,
-                Kills = kills,
-                Deaths = deaths,
-                Hits = hits
-            });
+
+            entries.Add(
+                new PlayerLeaderboardEntry
+                {
+                    ActorNumber = player.ActorNumber,
+                    Username = player.NickName,
+                    Score = score,
+                    Kills = kills,
+                    Deaths = deaths,
+                    Hits = hits,
+                }
+            );
         }
-        
+
         return entries;
     }
-    
+
     /// <summary>
     /// Create a single row in the leaderboard UI
     /// </summary>
@@ -123,17 +145,17 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
     {
         // Instantiate row from prefab
         GameObject rowInstance = Instantiate(leaderboardRowPrefab, leaderboardContent);
-        
+
         // Get text components from the row
         TextMeshProUGUI[] textComponents = rowInstance.GetComponentsInChildren<TextMeshProUGUI>();
-        
+
         if (textComponents.Length >= 3)
         {
             // Assign values to the three columns
             textComponents[0].text = position.ToString(); // Position
             textComponents[1].text = entry.Username; // Username
             textComponents[2].text = entry.Score.ToString(); // Score
-            
+
             if (debugMode)
             {
                 Debug.Log($"[GameOverUI] Row {position}: {entry.Username} - Score: {entry.Score}");
@@ -144,7 +166,7 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
             Debug.LogWarning($"[GameOverUI] Row prefab doesn't have 3 TextMeshProUGUI components!");
         }
     }
-    
+
     /// <summary>
     /// Hide the leaderboard
     /// </summary>
@@ -154,8 +176,30 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
         {
             leaderboardPanel.SetActive(false);
         }
+        if (lobbyButton != null)
+        {
+            lobbyButton.SetActive(true);
+        }
     }
-    
+
+    public void BackToLobby()
+    {
+        Debug.Log("[Leaderboard] Returning to Lobby...");
+
+        // Only leave room for this player
+        // OnLeftRoom callback will handle scene transition
+        PhotonNetwork.LeaveRoom();
+    }
+
+    public override void OnLeftRoom()
+    {
+        base.OnLeftRoom();
+        Debug.Log("[Leaderboard] Left room successfully, loading Main scene...");
+
+        // Load scene locally (only for this player)
+        SceneManager.LoadScene("Main");
+    }
+
     /// <summary>
     /// Data structure for leaderboard entry
     /// </summary>

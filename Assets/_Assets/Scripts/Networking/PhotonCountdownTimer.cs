@@ -1,4 +1,5 @@
 using System.Linq;
+using Hanzo.Player.Controllers;
 using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
@@ -337,7 +338,7 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
                 .ToList()
                 .ForEach(playerObj =>
                 {
-                    playerObj.SetActive(false);
+                    playerObj.GetComponent<PlayerMovementController>().enabled = false;
                 });
             
             if (countdownTimerObject != null)
