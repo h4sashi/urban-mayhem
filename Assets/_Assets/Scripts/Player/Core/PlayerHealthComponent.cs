@@ -24,7 +24,15 @@ namespace Hanzo.Player.Core
         public Image damageOverlay;
         public float fadeOverlaySpeed = 2f;
         public Color damageColor = Color.red;
+        
+        [Header("Health UI Settings")]
         public Image healthUIFill;
+        public float healthBarSmoothSpeed = 5f; // Speed for smooth health bar transitions
+        public Color healthBarHighColor = Color.green; // Color when health is high (75-100%)
+        public Color healthBarMidColor = Color.yellow; // Color when health is medium (25-75%)
+        public Color healthBarLowColor = Color.red; // Color when health is low (0-25%)
+        public bool animateHealthBar = true; // Toggle smooth animation
+        public bool colorHealthBar = true; // Toggle color transitions based on health
 
         [Header("Respawn Settings")]
         [SerializeField]
@@ -61,7 +69,9 @@ namespace Hanzo.Player.Core
         private NetworkedScoreManager scoreManager;
         private bool isDead = false;
         private Coroutine respawnCoroutine;
-        private Coroutine damageOverlayCoroutine; // Track overlay coroutine
+        private Coroutine damageOverlayCoroutine;
+        private Coroutine healthBarCoroutine; // Track health bar animation
+        private float targetHealthFill; // Target fill amount for smooth transitions
 
         // Offline compatibility
         private bool isOfflineMode = false;
@@ -76,23 +86,27 @@ namespace Hanzo.Player.Core
         {
             photonView = GetComponent<PhotonView>();
             currentHealth = maxHealth;
+            targetHealthFill = 1f;
 
             if (respawnUI != null)
                 respawnUI.SetActive(false);
 
-            // FIXED: Initialize damage overlay to transparent
+            // Initialize damage overlay to transparent
             if (damageOverlay != null)
             {
                 Color transparent = damageColor;
                 transparent.a = 0f;
                 damageOverlay.color = transparent;
-                damageOverlay.enabled = true; // Ensure it's enabled
+                damageOverlay.enabled = true;
                 Debug.Log("[PlayerHealth] Damage overlay initialized (transparent)");
             }
             else
             {
                 Debug.LogWarning("[PlayerHealth] ⚠️ Damage overlay Image not assigned!");
             }
+
+            // Initialize health UI
+            InitializeHealthUI();
 
             // Check offline mode
             CheckOfflineMode();
@@ -102,6 +116,30 @@ namespace Hanzo.Player.Core
                 playerVirtualCamera = GetComponentInChildren<CinemachineVirtualCamera>();
                 if (playerVirtualCamera == null)
                     Debug.LogWarning("[PlayerHealth] No CinemachineVirtualCamera found!");
+            }
+        }
+
+        /// <summary>
+        /// Initialize the health UI fill bar
+        /// </summary>
+        private void InitializeHealthUI()
+        {
+            if (healthUIFill != null)
+            {
+                healthUIFill.fillAmount = 1f;
+                healthUIFill.type = Image.Type.Filled;
+                healthUIFill.fillMethod = Image.FillMethod.Horizontal;
+                
+                if (colorHealthBar)
+                {
+                    healthUIFill.color = healthBarHighColor;
+                }
+                
+                Debug.Log("[PlayerHealth] Health UI initialized");
+            }
+            else
+            {
+                Debug.LogWarning("[PlayerHealth] ⚠️ Health UI Fill Image not assigned!");
             }
         }
 
@@ -140,11 +178,11 @@ namespace Hanzo.Player.Core
             if (audioManager.audioSource != null)
             {
                 audioManager.audioSource.playOnAwake = false;
-                audioManager.audioSource.spatialBlend = 1f; // Full 3D sound
+                audioManager.audioSource.spatialBlend = 1f;
                 audioManager.audioSource.rolloffMode = audioManager.audioRolloffMode;
                 audioManager.audioSource.minDistance = audioManager.audioMinDistance;
                 audioManager.audioSource.maxDistance = audioManager.audioMaxDistance;
-                audioManager.audioSource.dopplerLevel = 0f; // Disable doppler for gameplay sounds
+                audioManager.audioSource.dopplerLevel = 0f;
                 Debug.Log(
                     $"[PlayerHealth] AudioSource configured: Min={audioManager.audioMinDistance}m, Max={audioManager.audioMaxDistance}m, Rolloff={audioManager.audioRolloffMode}"
                 );
@@ -258,12 +296,12 @@ namespace Hanzo.Player.Core
         }
 
         /// <summary>
-        /// FIXED: Shows damage overlay at full intensity, then fades out
+        /// Shows damage overlay at full intensity, then fades out
         /// </summary>
         IEnumerator FadeDamageOverlay()
         {
             // FLASH: Set overlay to full visibility first
-            float maxAlpha = damageColor.a; // Use the alpha from damageColor as max
+            float maxAlpha = damageColor.a;
             damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, maxAlpha);
             
             Debug.Log($"[PlayerHealth] 🩸 Damage overlay flashed (alpha: {maxAlpha}) for local player");
@@ -276,7 +314,7 @@ namespace Hanzo.Player.Core
             while (alpha > 0f)
             {
                 alpha -= Time.deltaTime * fadeOverlaySpeed;
-                alpha = Mathf.Max(0f, alpha); // Clamp to 0
+                alpha = Mathf.Max(0f, alpha);
                 damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, alpha);
                 yield return null;
             }
@@ -284,6 +322,91 @@ namespace Hanzo.Player.Core
             // Ensure fully transparent at end
             damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, 0f);
             Debug.Log("[PlayerHealth] Damage overlay faded out");
+        }
+
+        /// <summary>
+        /// Update health bar with smooth animation and color transitions
+        /// </summary>
+        private void UpdateHealthUI()
+        {
+            if (healthUIFill == null || !IsLocalPlayer())
+                return;
+
+            // Calculate target fill amount
+            targetHealthFill = currentHealth / maxHealth;
+
+            // Stop existing animation if running
+            if (healthBarCoroutine != null)
+            {
+                StopCoroutine(healthBarCoroutine);
+            }
+
+            if (animateHealthBar)
+            {
+                // Start smooth animation
+                healthBarCoroutine = StartCoroutine(AnimateHealthBar());
+            }
+            else
+            {
+                // Instant update
+                healthUIFill.fillAmount = targetHealthFill;
+                UpdateHealthBarColor();
+            }
+        }
+
+        /// <summary>
+        /// Smoothly animate the health bar fill amount
+        /// </summary>
+        IEnumerator AnimateHealthBar()
+        {
+            float currentFill = healthUIFill.fillAmount;
+
+            while (Mathf.Abs(currentFill - targetHealthFill) > 0.001f)
+            {
+                currentFill = Mathf.Lerp(currentFill, targetHealthFill, Time.deltaTime * healthBarSmoothSpeed);
+                healthUIFill.fillAmount = currentFill;
+                
+                // Update color during animation
+                if (colorHealthBar)
+                {
+                    UpdateHealthBarColor();
+                }
+
+                yield return null;
+            }
+
+            // Ensure exact target is reached
+            healthUIFill.fillAmount = targetHealthFill;
+            UpdateHealthBarColor();
+        }
+
+        /// <summary>
+        /// Update health bar color based on current health percentage
+        /// </summary>
+        private void UpdateHealthBarColor()
+        {
+            if (!colorHealthBar || healthUIFill == null)
+                return;
+
+            float healthPercent = currentHealth / maxHealth;
+
+            if (healthPercent > 0.75f)
+            {
+                // High health (75-100%) - Green
+                healthUIFill.color = healthBarHighColor;
+            }
+            else if (healthPercent > 0.25f)
+            {
+                // Medium health (25-75%) - Gradient from Green to Yellow to Red
+                float t = (healthPercent - 0.25f) / 0.5f; // Normalize to 0-1 range
+                healthUIFill.color = Color.Lerp(healthBarMidColor, healthBarHighColor, t);
+            }
+            else
+            {
+                // Low health (0-25%) - Gradient from Red to Yellow
+                float t = healthPercent / 0.25f; // Normalize to 0-1 range
+                healthUIFill.color = Color.Lerp(healthBarLowColor, healthBarMidColor, t);
+            }
         }
 
         /// <summary>
@@ -344,23 +467,17 @@ namespace Hanzo.Player.Core
                 $"[PlayerHealth] {GetPlayerName()} took {damageAmount} damage from {damageType}. Health: {currentHealth}/{maxHealth}"
             );
 
-            // FIXED: Show damage overlay and play sound when damage is taken
+            // Update health UI with smooth animation and color change
+            UpdateHealthUI();
+
+            // Show damage overlay and play sound when damage is taken
             if (damageAmount > 0)
             {
-                // Show overlay only for local player
                 ShowDamageOverlay();
-                
-                // Play hurt sound with delay
                 StartCoroutine(DelayedPlayHurtSound(0.95f));
             }
 
-            // Update health UI fill if assigned
-            if (healthUIFill != null)
-            {
-                healthUIFill.fillAmount = currentHealth / maxHealth;
-            }
-
-            // Only increment hit counter for Dash damage (not all damage types)
+            // Only increment hit counter for Dash damage
             int hitsTaken = 0;
             if (damageType == DamageType.Dash)
             {
@@ -378,7 +495,6 @@ namespace Hanzo.Player.Core
             }
             else
             {
-                // Get current hit count without incrementing
                 hitsTaken = isOfflineMode
                     ? offlineHitsTaken
                     : (
@@ -430,7 +546,7 @@ namespace Hanzo.Player.Core
                 catch { }
             }
 
-            // FIXED: Check for death based on health first, then hit count as backup
+            // Check for death based on health first, then hit count as backup
             if (currentHealth <= 0)
             {
                 Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} died from health depletion!");
@@ -544,10 +660,21 @@ namespace Hanzo.Player.Core
             EnablePlayer();
             EnableCamera();
 
-            // Reset health UI
+            // Reset health UI to full with animation
+            targetHealthFill = 1f;
             if (healthUIFill != null)
             {
-                healthUIFill.fillAmount = 1f;
+                if (animateHealthBar)
+                {
+                    if (healthBarCoroutine != null)
+                        StopCoroutine(healthBarCoroutine);
+                    healthBarCoroutine = StartCoroutine(AnimateHealthBar());
+                }
+                else
+                {
+                    healthUIFill.fillAmount = 1f;
+                    UpdateHealthBarColor();
+                }
             }
 
             // Clear damage overlay
@@ -663,6 +790,9 @@ namespace Hanzo.Player.Core
             
             if (damageOverlayCoroutine != null)
                 StopCoroutine(damageOverlayCoroutine);
+
+            if (healthBarCoroutine != null)
+                StopCoroutine(healthBarCoroutine);
         }
 
         private void OnGUI()
