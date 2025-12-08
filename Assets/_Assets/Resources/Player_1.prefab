@@ -3769,6 +3769,7 @@ MonoBehaviour:
   useMobileControls: 1
   mobileJoystick: {fileID: 4753393381974030272}
   mobileControlsUI: {fileID: 5501291232339902206}
+  isAIControlled: 0
 --- !u!114 &3675924095626907759
 MonoBehaviour:
   m_ObjectHideFlags: 0

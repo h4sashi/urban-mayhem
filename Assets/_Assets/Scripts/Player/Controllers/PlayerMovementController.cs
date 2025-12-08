@@ -90,6 +90,13 @@ namespace Hanzo.Player.Controllers
             inputHandler = GetComponent<PlayerInputHandler>();
             stateController = GetComponent<PlayerStateController>();
 
+            var aiController = GetComponent<Hanzo.AI.AIPlayerController>();
+            if (aiController != null)
+            {
+                Debug.Log("[Movement] 🤖 AI detected - this is an AI player");
+                // The issue might be PhotonView.IsMine check blocking AI
+            }
+
             if (virtualCamera == null)
             {
                 virtualCamera = GetComponentInChildren<CinemachineVirtualCamera>(true);
@@ -129,8 +136,13 @@ namespace Hanzo.Player.Controllers
 
         private void Update()
         {
-            if (!photonView.IsMine)
-                return;
+            // Check if this is AI or local player
+            bool isAI = inputHandler != null && inputHandler.IsAIControlled();
+
+            if (!isAI && !photonView.IsMine)
+            {
+                return; // Remote human players don't update
+            }
 
             // Don't allow movement if stunned
             if (stateController != null && stateController.IsStunned)
@@ -138,10 +150,18 @@ namespace Hanzo.Player.Controllers
                 return;
             }
 
-            // Convert raw input to camera-relative movement
-            if (useCameraRelativeMovement)
+            // Convert raw input to camera-relative movement (only for human players)
+            if (!isAI && useCameraRelativeMovement)
             {
                 ProcessCameraRelativeInput();
+            }
+            else if (isAI)
+            {
+                // AI uses direct input (no camera-relative processing)
+                if (rawInput.magnitude > 0.01f)
+                {
+                    movingState?.SetMoveInput(rawInput);
+                }
             }
 
             // Update abilities
@@ -155,8 +175,7 @@ namespace Hanzo.Player.Controllers
                 CheckForFalling();
             }
 
-            // CRITICAL FIX: Always update current state
-            // Remove the condition that prevented updates during falling
+            // Always update current state
             currentState?.Update(this);
 
             // Check for state transitions
@@ -182,10 +201,14 @@ namespace Hanzo.Player.Controllers
                 ChangeState(fallingState);
             }
             // EXIT FALLING: Controller says we're grounded and we're in FallingState
-            else if (stateController.IsGrounded && !stateController.IsFalling && currentState is FallingState)
+            else if (
+                stateController.IsGrounded
+                && !stateController.IsFalling
+                && currentState is FallingState
+            )
             {
                 Debug.Log("[Movement] Landing detected - exiting FallingState");
-                
+
                 // SIMPLE: Just check current input to determine next state
                 if (rawInput.magnitude > 0.1f)
                 {
@@ -204,7 +227,7 @@ namespace Hanzo.Player.Controllers
         {
             // CRITICAL FIX: Allow normal transitions even during falling
             // The state itself will handle whether to apply movement
-            
+
             // Dash can interrupt any state
             if (dashAbility.IsActive && !(currentState is DashingState))
             {
@@ -358,14 +381,30 @@ namespace Hanzo.Player.Controllers
             return Physics.Raycast(origin, Vector3.down, groundCheckDistance, groundLayer);
         }
 
+        // ADD THIS DEBUG SECTION to your HandleMoveInput method in PlayerMovementController.cs
         private void HandleMoveInput(Vector2 input)
         {
-            if (!photonView.IsMine)
+            // Check if this is AI-controlled
+            bool isAI = inputHandler != null && inputHandler.IsAIControlled();
+
+            // Allow input if AI OR if it's the local player
+            if (!isAI && (photonView == null || !photonView.IsMine))
+            {
                 return;
+            }
+
             if (stateController != null && stateController.IsStunned)
+            {
                 return;
+            }
 
             rawInput = input;
+
+            // DEBUG
+            if (isAI && input.magnitude > 0.1f && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"[Movement] 🤖 AI HandleMoveInput: {input}");
+            }
 
             if (!useCameraRelativeMovement)
             {
@@ -375,27 +414,43 @@ namespace Hanzo.Player.Controllers
 
         private void HandleDashInput()
         {
-            if (!photonView.IsMine)
+            bool isAI = inputHandler != null && inputHandler.IsAIControlled();
+
+            if (!isAI && (photonView == null || !photonView.IsMine))
+            {
                 return;
+            }
+
             if (stateController != null && stateController.IsStunned)
+            {
                 return;
+            }
 
             if (dashAbility != null && dashAbility.TryActivate())
             {
-                Debug.Log("Dash activated!");
+                Debug.Log($"[Movement] Dash activated! ({(isAI ? "AI" : "Human")})");
             }
         }
 
         private void HandleSpeedBoostInput()
         {
-            if (!photonView.IsMine)
+            bool isAI = inputHandler != null && inputHandler.IsAIControlled();
+
+            if (!isAI && (photonView == null || !photonView.IsMine))
+            {
                 return;
+            }
+
             if (stateController != null && stateController.IsStunned)
+            {
                 return;
+            }
 
             if (speedBoostAbility != null && speedBoostAbility.TryActivate())
             {
-                Debug.Log($"Speed Boost activated! Stack Level: {speedBoostAbility.StackLevel}");
+                Debug.Log(
+                    $"[Movement] Speed Boost activated! ({(isAI ? "AI" : "Human")}) Stack Level: {speedBoostAbility.StackLevel}"
+                );
             }
         }
 
@@ -482,7 +537,9 @@ namespace Hanzo.Player.Controllers
             GUILayout.Label($"Camera-Relative: {useCameraRelativeMovement}");
             if (useCameraRelativeMovement)
             {
-                GUILayout.Label($"Processed Input: ({cameraRelativeInput.x:F2}, {cameraRelativeInput.z:F2})");
+                GUILayout.Label(
+                    $"Processed Input: ({cameraRelativeInput.x:F2}, {cameraRelativeInput.z:F2})"
+                );
             }
 
             GUILayout.Space(10);
@@ -496,7 +553,9 @@ namespace Hanzo.Player.Controllers
             GUILayout.Label($"Active: {speedBoostAbility?.IsActive ?? false}");
             GUILayout.Label($"Cooldown: {speedBoostAbility?.CooldownRemaining ?? 0f:F2}s");
             GUILayout.Label($"Stack Level: {speedBoostAbility?.StackLevel ?? 0}");
-            GUILayout.Label($"Speed Multiplier: {speedBoostAbility?.CurrentSpeedMultiplier ?? 1f:F2}x");
+            GUILayout.Label(
+                $"Speed Multiplier: {speedBoostAbility?.CurrentSpeedMultiplier ?? 1f:F2}x"
+            );
 
             if (stateController != null)
             {
