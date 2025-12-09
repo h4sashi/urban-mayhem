@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df11024747f53490c894ffd917c93077, type: 3}
+  m_Name: AIBehaviorSettings
+  m_EditorClassIdentifier: 
+  moveSpeed: 5
+  acceleration: 15
+  rotationSpeed: 540
+  detectionRadius: 15
+  detectionInterval: 0.2
+  loseTargetDistance: 25
+  attackRange: 2
+  attackCooldown: 1.5
+  attackKnockbackForce: 10
+  attackStunDuration: 2
+  wanderRadius: 10
+  wanderChangeInterval: 3
+  idleWaitTime: 2
+  persistentChase: 1
+  aggressiveMode: 0
+  dashChance: 0.3

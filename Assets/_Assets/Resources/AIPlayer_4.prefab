@@ -533,7 +533,7 @@ GameObject:
   - component: {fileID: 3225684097604703802}
   - component: {fileID: 8088844049266096495}
   - component: {fileID: 6560950640680098693}
-  - component: {fileID: 6658115412330379410}
+  - component: {fileID: 203967092827964065}
   m_Layer: 6
   m_Name: AIPlayer_4
   m_TagString: Player
@@ -668,7 +668,7 @@ Rigidbody:
   m_GameObject: {fileID: 698494153800249701}
   serializedVersion: 4
   m_Mass: 1
-  m_Drag: 0
+  m_Drag: 0.3
   m_AngularDrag: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
@@ -705,7 +705,7 @@ MonoBehaviour:
   OwnershipTransfer: 0
   observableSearch: 2
   ObservedComponents: []
-  sceneViewId: 0
+  sceneViewId: 22
   InstantiationId: 0
   isRuntimeInstantiated: 0
 --- !u!114 &6067480636971744137
@@ -724,8 +724,6 @@ MonoBehaviour:
   useMobileControls: 0
   mobileJoystick: {fileID: 0}
   mobileControlsUI: {fileID: 0}
-  isAIControlled: 1
-  debugLogging: 1
 --- !u!114 &2890884094041263894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -835,14 +833,14 @@ MonoBehaviour:
   enableFallDamage: 0
   fallDamageThreshold: 5
   fallDamageMultiplier: 10
-  stunSFX: {fileID: 0}
+  stunSFX: {fileID: 8300000, guid: 298172e66740040f09483220ecbdf176, type: 3}
   stunSFXVolume: 0.7
   audioMinDistance: 5
   audioMaxDistance: 25
   audioRolloffMode: 1
   showDebugInfo: 0
-  audioSource: {fileID: 0}
---- !u!114 &6658115412330379410
+  audioSource: {fileID: 5869074995491950185}
+--- !u!114 &203967092827964065
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -854,23 +852,49 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5469ffbeb3f0d4537ae9786c9afaae0f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  behaviorProfile: {fileID: 11400000, guid: c559d4d01de5d4666bc59c7af2cf1fb7, type: 2}
-  updateInterval: 0.1
-  decisionDelay: 0.2
-  targetScanRadius: 40
-  targetSwitchCooldown: 3
+  behaviorSettings: {fileID: 11400000, guid: dd3677216c75640eca3633ae0a71d537, type: 2}
   playerLayer:
     serializedVersion: 2
     m_Bits: 64
-  optimalDashRange: 8
-  minDashRange: 3
-  maxDashRange: 15
-  retreatHealthThreshold: 0.3
-  wanderRadius: 30
-  arrivalDistance: 2
-  obstacleAvoidanceDistance: 5
-  showDebugGizmos: 1
-  verboseLogging: 1
+  detectionRadius: 15
+  detectionInterval: 0.2
+  loseTargetDistance: 25
+  attackRange: 2
+  meleeAttackRange: 1.8
+  attackCooldown: 1.5
+  attackKnockbackForce: 10
+  attackStunDuration: 2
+  enableMeleeAttacks: 0
+  enableDashAttacks: 1
+  dashAttackMultiplier: 1.5
+  wanderAfterSuccessfulHit: 1
+  wanderAfterHitDuration: 3
+  closeRangeStopDistance: 1.5
+  rotationSpeed: 10
+  alwaysFaceTarget: 1
+  enableTacticalRetreat: 1
+  retreatDistance: 8
+  retreatWhenAbilityOnCooldown: 1
+  minRetreatDuration: 2
+  canUseDash: 1
+  canUseSpeedBoost: 1
+  dashUsageChance: 0.3
+  dashMinDistance: 4
+  dashMaxDistance: 10
+  dashCooldownTime: 3
+  dashDecisionInterval: 0.5
+  speedBoostUsageChance: 0.6
+  speedBoostMinDistance: 5
+  speedBoostMaxDistance: 12
+  wanderRadius: 32.4
+  wanderChangeInterval: 3
+  idleWaitTime: 2
+  collisionCheckRadius: 0.8
+  attackCollisionLayers:
+    serializedVersion: 2
+    m_Bits: 64
+  showDebugInfo: 1
+  showGizmos: 1
 --- !u!1 &724563936096573730
 GameObject:
   m_ObjectHideFlags: 0
@@ -1373,7 +1397,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_BindingMode: 1
-  m_FollowOffset: {x: 0, y: 3.35, z: -4.63}
+  m_FollowOffset: {x: -3.52, y: 0.47, z: -2.45}
   m_XDamping: 1
   m_YDamping: 1
   m_ZDamping: 1
@@ -6996,14 +7020,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8915069992965616432}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.17812204, y: -2.419864e-23, z: 1.1149816e-23, w: 0.98400843}
-  m_LocalPosition: {x: 0, y: 3.0454545, z: -4.209091}
+  m_LocalRotation: {x: -0.1154871, y: 0.4590494, z: 0.060325466, w: 0.87880445}
+  m_LocalPosition: {x: -3.2, y: 0.42727298, z: -2.2272701}
   m_LocalScale: {x: 0.7142857, y: 0.7142857, z: 0.7142857}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 9023374424715978201}
   m_Father: {fileID: 4325687819350242492}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 55.161, z: 0}
 --- !u!114 &5142794313829267398
 MonoBehaviour:
   m_ObjectHideFlags: 0

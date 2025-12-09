@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f494560bf88a40159fbea375eb5f451, type: 3}
   m_Name: AI_Abilities
   m_EditorClassIdentifier: 
-  dashSpeed: 80
+  dashSpeed: 35
   dashDuration: 0.4
   dashCooldown: 3
   dashSpeedCurve:
@@ -23,16 +23,16 @@ MonoBehaviour:
       value: 1
       inSlope: 0
       outSlope: 0
-      tangentMode: 0
+      tangentMode: 34
       weightedMode: 0
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
       time: 1
-      value: 0
+      value: 1
       inSlope: 0
       outSlope: 0
-      tangentMode: 0
+      tangentMode: 34
       weightedMode: 0
       inWeight: 0
       outWeight: 0
