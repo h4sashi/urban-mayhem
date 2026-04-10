@@ -1,4 +1,5 @@
 using System.Collections;
+using Hanzo.Networking.PlayFab;
 using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
@@ -47,10 +48,7 @@ public class MatchmakingManager : MonoBehaviourPunCallbacks
         // Set nickname from PlayerPrefs
         if (string.IsNullOrEmpty(PhotonNetwork.NickName))
         {
-            PhotonNetwork.NickName = PlayerPrefs.GetString(
-                "USERNAME",
-                "Player" + Random.Range(1000, 9999)
-            );
+            PhotonNetwork.NickName = PlayFabManager.Instance.PlayerDisplayName ?? "Player" + Random.Range(1000, 9999);
         }
 
         // Load max players setting

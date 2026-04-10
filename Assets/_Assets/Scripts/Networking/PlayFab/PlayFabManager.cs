@@ -66,8 +66,8 @@ namespace Hanzo.Networking.PlayFab
         {
             if (scene.name == "Main")
             {
-               //Use cloudscripting to get player profile infoif he is new player or a player that
-               //has bought items outside of playfab then get the profile info from outside source
+                //Use cloudscripting to get player profile infoif he is new player or a player that
+                //has bought items outside of playfab then get the profile info from outside source
             }
         }
 
@@ -120,7 +120,7 @@ namespace Hanzo.Networking.PlayFab
 
         public void DefaultLogin()
         {
-                 Debug.Log("Attempting Default Login...");
+            Debug.Log("Attempting Default Login...");
             UpdateStatus("Logging in...");
             string _email = "hanzohxh@gmail.com";
             string _password = "123456";
@@ -136,7 +136,6 @@ namespace Hanzo.Networking.PlayFab
             var request = new LoginWithEmailAddressRequest { Email = email, Password = password };
 
             PlayFabClientAPI.LoginWithEmailAddress(request, OnLoginSuccess, OnLoginFailure);
-       
         }
 
         public void SignUp()
@@ -221,7 +220,27 @@ namespace Hanzo.Networking.PlayFab
             Debug.Log("Login successful! PlayFab ID: " + result.PlayFabId);
             PlayFabId = result.PlayFabId;
             UpdateStatus("Login successful!");
-            LoadNextScene();
+
+            // Fetch display name before loading next scene
+            GetPlayerProfile(
+                profileResult =>
+                {
+                    PlayerDisplayName =
+                        profileResult.PlayerProfile?.DisplayName
+                        ?? "Player" + Random.Range(1000, 9999);
+                    Debug.Log($"[PlayFab] Display name loaded: {PlayerDisplayName}");
+                    LoadNextScene();
+                },
+                error =>
+                {
+                    Debug.LogWarning(
+                        "[PlayFab] Could not fetch display name: " + error.ErrorMessage
+                    );
+                    PlayerDisplayName = "Player" + Random.Range(1000, 9999);
+                    LoadNextScene();
+                }
+            );
+            // Remove LoadNextScene() from here since it's now inside the callback
         }
 
         private void OnRegisterSuccess(RegisterPlayFabUserResult result)

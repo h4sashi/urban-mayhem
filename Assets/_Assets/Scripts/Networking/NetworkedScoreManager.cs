@@ -34,7 +34,7 @@ namespace Hanzo.Networking
         private const string DEATHS_KEY = "Deaths";
 
         // In NetworkedScoreManager
-public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>(aiNames);
+        public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>(aiNames);
 
         // Add to local cache
         private Dictionary<int, int> playerDeaths = new Dictionary<int, int>();
@@ -47,6 +47,9 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
         private Dictionary<int, int> aiKills = new Dictionary<int, int>();
         private Dictionary<int, int> aiDeaths = new Dictionary<int, int>();
 
+        // Add this alongside the existing playerScores/playerDeaths dictionaries
+        private Dictionary<int, int> playerKills = new Dictionary<int, int>();
+
         /// <summary>
         /// Called by AIFillTimer after AIs spawn. Registers them so they
         /// appear on the scoreboard alongside real players.
@@ -55,12 +58,11 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
         {
             for (int i = 0; i < count; i++)
             {
-                int aiId = -(i + 1); // -1, -2, -3...
-                aiNames[aiId] = $"AI Player {i + 1}";
+                int aiId = -(i + 1);
+                aiNames[aiId] = $"AI_Player_{i + 1}"; // matches GameObject name
                 aiScores[aiId] = 0;
                 aiKills[aiId] = 0;
                 aiDeaths[aiId] = 0;
-                Debug.Log($"[ScoreManager] Registered {aiNames[aiId]} (ID: {aiId})");
             }
         }
 
@@ -124,6 +126,23 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
             }
         }
 
+        public int GetPlayerKills(int actorNumber)
+        {
+            // Check local cache first (immediately consistent)
+            if (playerKills.TryGetValue(actorNumber, out int cached))
+                return cached;
+
+            // Fallback to Photon custom properties
+            PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
+            if (player == null)
+                return 0;
+
+            if (player.CustomProperties.TryGetValue(KILLS_KEY, out object killsObj))
+                return (int)killsObj;
+
+            return 0;
+        }
+
         /// <summary>
         /// Add score to a player (called when they successfully hit someone with dash)
         /// </summary>
@@ -133,7 +152,7 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
             if (player == null)
             {
                 Debug.LogWarning(
-                    $"[ScoreManager] Player with ActorNumber {actorNumber} not found!"
+                    $"[ScoreManager] AddDashHitScore: Player {actorNumber} not found!"
                 );
                 return;
             }
@@ -141,17 +160,19 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
             int currentScore = GetPlayerScore(actorNumber);
             int newScore = currentScore + scoreForDashHit;
 
-            // Update score
-            Hashtable props = new Hashtable { { SCORE_KEY, newScore } };
+            int currentKills = GetPlayerKills(actorNumber);
+            int newKills = currentKills + 1;
+
+            // Write to local cache IMMEDIATELY — don't wait for Photon async
+            playerScores[actorNumber] = newScore;
+            playerKills[actorNumber] = newKills;
+
+            // Sync to Photon custom properties (async — arrives late, but cache is already correct)
+            Hashtable props = new Hashtable { { SCORE_KEY, newScore }, { KILLS_KEY, newKills } };
             player.SetCustomProperties(props);
 
-            // Increment kills
-            int currentKills = GetPlayerKills(actorNumber);
-            Hashtable killProps = new Hashtable { { KILLS_KEY, currentKills + 1 } };
-            player.SetCustomProperties(killProps);
-
             Debug.Log(
-                $"[ScoreManager] 💥 {player.NickName} scored {scoreForDashHit} points! (Dash Hit) | Total: {newScore}"
+                $"[ScoreManager] 💥 {player.NickName} scored {scoreForDashHit} pts (Kill #{newKills}) | Total: {newScore}"
             );
         }
 
@@ -203,13 +224,18 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
         /// </summary>
         public int GetAIId(GameObject obj)
         {
-            foreach (var kvp in aiNames)
+            Transform current = obj.transform;
+            while (current != null)
             {
-                // Match by name since AI GameObjects are named "AI Player 1", "AI Player 2" etc.
-                if (obj.name.Contains(kvp.Value) || obj.transform.root.name.Contains(kvp.Value))
-                    return kvp.Key;
+                string objName = current.gameObject.name;
+                foreach (var kvp in aiNames)
+                {
+                    if (objName.Contains(kvp.Value))
+                        return kvp.Key;
+                }
+                current = current.parent;
             }
-            return 0; // 0 means not a registered AI
+            return 0;
         }
 
         public int GetAIScore(int aiId) => aiScores.TryGetValue(aiId, out int s) ? s : 0;
@@ -367,14 +393,17 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
         /// </summary>
         public int GetPlayerScore(int actorNumber)
         {
+            // Check local cache first (immediately consistent)
+            if (playerScores.TryGetValue(actorNumber, out int cachedScore))
+                return cachedScore;
+
+            // Fallback to Photon custom properties
             PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
             if (player == null)
                 return 0;
 
             if (player.CustomProperties.TryGetValue(SCORE_KEY, out object scoreObj))
-            {
                 return (int)scoreObj;
-            }
 
             return 0;
         }
@@ -396,22 +425,7 @@ public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>
             return 0;
         }
 
-        /// <summary>
-        /// Get a player's kill count
-        /// </summary>
-        public int GetPlayerKills(int actorNumber)
-        {
-            PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
-            if (player == null)
-                return 0;
-
-            if (player.CustomProperties.TryGetValue(KILLS_KEY, out object killsObj))
-            {
-                return (int)killsObj;
-            }
-
-            return 0;
-        }
+      
 
         /// <summary>
         /// Called when player properties are updated

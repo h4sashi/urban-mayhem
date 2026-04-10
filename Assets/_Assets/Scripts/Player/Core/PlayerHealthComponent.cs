@@ -618,6 +618,24 @@ namespace Hanzo.Player.Core
             }
         }
 
+        // In PlayerHealthComponent — add this RPC
+        [PunRPC]
+        private void RPC_TakeDamage(float damageAmount, int attackerViewID, int damageTypeInt)
+        {
+            if (!IsLocalPlayer())
+                return;
+
+            DamageType damageType = (DamageType)damageTypeInt;
+
+            // Resolve attacker GameObject from ViewID
+            GameObject attackerObj = null;
+            PhotonView attackerView = PhotonView.Find(attackerViewID);
+            if (attackerView != null)
+                attackerObj = attackerView.gameObject;
+
+            TakeDamage(damageAmount, attackerObj, damageType);
+        }
+
         /// <summary>
         /// Instead of instantly disabling the player, applies a knockback+stun
         /// and then respawns after the stun resolves.  The "dead" state is held

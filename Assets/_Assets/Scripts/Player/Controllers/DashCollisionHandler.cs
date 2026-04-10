@@ -363,51 +363,56 @@ namespace Hanzo.Player.Controllers
         }
 
         // <summary>
-/// Finds the nearest valid target within launchTargetSearchRadius of the
-/// impact point and returns a direction aimed at them, blended with the
-/// natural knockback so it never feels perfectly scripted.
-/// Falls back to natural knockback direction if no target is found.
-/// </summary>
-private Vector3 GetAimedLaunchDirection(Vector3 impactPoint, Vector3 naturalKnockback)
-{
-    Collider[] candidates = Physics.OverlapSphere(
-        impactPoint, launchTargetSearchRadius, launchTargetLayer);
-
-    float     closestDist   = Mathf.Infinity;
-    Transform closestTarget = null;
-
-    foreach (var col in candidates)
-    {
-        // Don't aim back at the dasher
-        if (col.transform.root == transform.root) continue;
-
-        var health = col.GetComponentInParent<PlayerHealthComponent>();
-        if (health != null && !health.IsAlive) continue;
-
-        float d = Vector3.Distance(impactPoint, col.transform.position);
-        if (d < closestDist)
+        /// Finds the nearest valid target within launchTargetSearchRadius of the
+        /// impact point and returns a direction aimed at them, blended with the
+        /// natural knockback so it never feels perfectly scripted.
+        /// Falls back to natural knockback direction if no target is found.
+        /// </summary>
+        private Vector3 GetAimedLaunchDirection(Vector3 impactPoint, Vector3 naturalKnockback)
         {
-            closestDist   = d;
-            closestTarget = col.transform;
+            Collider[] candidates = Physics.OverlapSphere(
+                impactPoint,
+                launchTargetSearchRadius,
+                launchTargetLayer
+            );
+
+            float closestDist = Mathf.Infinity;
+            Transform closestTarget = null;
+
+            foreach (var col in candidates)
+            {
+                // Don't aim back at the dasher
+                if (col.transform.root == transform.root)
+                    continue;
+
+                var health = col.GetComponentInParent<PlayerHealthComponent>();
+                if (health != null && !health.IsAlive)
+                    continue;
+
+                float d = Vector3.Distance(impactPoint, col.transform.position);
+                if (d < closestDist)
+                {
+                    closestDist = d;
+                    closestTarget = col.transform;
+                }
+            }
+
+            Vector3 baseDir;
+            if (closestTarget != null)
+            {
+                Vector3 toTarget = (closestTarget.position - impactPoint).normalized;
+                // Blend 70% aimed, 30% natural so it doesn't feel like a laser
+                baseDir = (toTarget * 0.7f + naturalKnockback * 0.3f).normalized;
+            }
+            else
+            {
+                baseDir = naturalKnockback;
+            }
+
+            // Preserve the upward arc
+            baseDir.y = destructibleUpwardForce;
+            return baseDir.normalized;
         }
-    }
-
-    Vector3 baseDir;
-    if (closestTarget != null)
-    {
-        Vector3 toTarget = (closestTarget.position - impactPoint).normalized;
-        // Blend 70% aimed, 30% natural so it doesn't feel like a laser
-        baseDir = (toTarget * 0.7f + naturalKnockback * 0.3f).normalized;
-    }
-    else
-    {
-        baseDir = naturalKnockback;
-    }
-
-    // Preserve the upward arc
-    baseDir.y = destructibleUpwardForce;
-    return baseDir.normalized;
-}
 
         // ========== IDamageDealer Implementation ==========
 
@@ -416,10 +421,33 @@ private Vector3 GetAimedLaunchDirection(Vector3 impactPoint, Vector3 naturalKnoc
             if (target == null)
                 return;
 
-            // Pass this GameObject as the damage source
-            target.TakeDamage(damageAmount, gameObject, damageType);
+            // Get the target's PhotonView to send damage via RPC
+            // so TakeDamage runs on the VICTIM's machine (bypasses IsLocalPlayer() guard)
+            MonoBehaviour targetMono = target as MonoBehaviour;
+            if (targetMono != null)
+            {
+                PhotonView targetView = targetMono.GetComponentInParent<PhotonView>();
+                if (targetView != null)
+                {
+                    targetView.RPC(
+                        "RPC_TakeDamage",
+                        RpcTarget.All,
+                        damageAmount,
+                        photonView.ViewID,
+                        (int)damageType
+                    );
+                    Debug.Log(
+                        $"[{name}] Dealt {damageAmount} {damageType} damage to {targetMono.name} via RPC"
+                    );
+                    return;
+                }
+            }
 
-            Debug.Log($"[{name}] Dealt {damageAmount} {damageType} damage to {target}");
+            // Fallback for offline mode — call directly
+            target.TakeDamage(damageAmount, gameObject, damageType);
+            Debug.Log(
+                $"[{name}] Dealt {damageAmount} {damageType} damage to {target} (offline fallback)"
+            );
         }
 
         /// <summary>
@@ -431,55 +459,28 @@ private Vector3 GetAimedLaunchDirection(Vector3 impactPoint, Vector3 naturalKnoc
             Collider hitCollider
         )
         {
-            // Don't hit already stunned players
             if (targetState.IsStunned)
-            {
-                if (verboseLogging)
-                {
-                    Debug.Log(
-                        $"[{name}] ⏭️ Target {targetPhotonView.Owner.NickName} already stunned"
-                    );
-                }
                 return;
-            }
 
-            // ========== APPLY DAMAGE ==========
-            IDamageable targetDamageable = hitCollider.GetComponentInParent<IDamageable>();
-            if (targetDamageable != null)
-            {
-                DealDamage(targetDamageable, dashDamage, DamageType.Dash);
-
-                // SCORE IS NOW HANDLED IN PlayerHealthComponent.TakeDamage()
-                // No need to manually add score here anymore
-            }
-            else
-            {
-                Debug.LogWarning(
-                    $"[{name}] Player {hitCollider.name} has no IDamageable component!"
-                );
-            }
-
-            // Calculate knockback direction
-            Vector3 knockbackDir = (hitCollider.transform.position - transform.position).normalized;
-
-            // Apply knockback via RPC
-            float knockbackForce = abilitySettings.KnockbackForce;
-
-            // Stack bonus: higher stacks = more knockback
-            if (playerMovementController.DashAbility.StackLevel >= 2)
-            {
-                knockbackForce *= 1.3f;
-            }
-            if (playerMovementController.DashAbility.StackLevel >= 3)
-            {
-                knockbackForce *= 1.5f;
-            }
-
-            Debug.Log(
-                $"[{name}] 💥 HIT PLAYER {targetPhotonView.Owner.NickName}! Knockback: {knockbackForce}, Damage: {dashDamage}"
+            // Send damage via RPC to victim's machine
+            // TakeDamage must run on the victim's client (IsLocalPlayer() check)
+            targetPhotonView.RPC(
+                "RPC_TakeDamage",
+                RpcTarget.All,
+                dashDamage,
+                photonView.ViewID, // attacker's ViewID so victim can resolve the source
+                (int)DamageType.Dash
             );
 
-            // IMPORTANT: Call the RPC on the VICTIM's PhotonView
+            // Knockback RPC (unchanged)
+            Vector3 knockbackDir = (hitCollider.transform.position - transform.position).normalized;
+            float knockbackForce = abilitySettings.KnockbackForce;
+
+            if (playerMovementController.DashAbility.StackLevel >= 2)
+                knockbackForce *= 1.3f;
+            if (playerMovementController.DashAbility.StackLevel >= 3)
+                knockbackForce *= 1.5f;
+
             targetPhotonView.RPC(
                 "RPC_ReceiveKnockback",
                 RpcTarget.All,
@@ -489,14 +490,9 @@ private Vector3 GetAimedLaunchDirection(Vector3 impactPoint, Vector3 naturalKnoc
                 photonView.ViewID
             );
 
-            // Spawn hit VFX
             SpawnHitEffect(hitCollider.transform.position, false);
-
-            // Play hit sound
             if (hitSound != null)
-            {
                 audioSource.PlayOneShot(hitSound);
-            }
 
             lastPlayerHitTime = Time.time;
         }
