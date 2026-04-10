@@ -37,7 +37,7 @@ namespace Hanzo.Player.Input
             photonView = GetComponent<PhotonView>();
             
             // Check if this is AI-controlled
-            isAIControlled = GetComponent<Hanzo.AI.Enemies.AIPlayerController>() != null;
+            isAIControlled = GetComponent<Hanzo.AI.AIPlayerController>() != null;
             
             // Detect platform
             isMobilePlatform = true; // Your current setup for testing

@@ -24,7 +24,11 @@ namespace Hanzo.Player.Core
         public Image damageOverlay;
         public float fadeOverlaySpeed = 2f;
         public Color damageColor = Color.red;
-        
+
+        private float lastLethalHitTime = -999f;
+        private GameObject lastLethalHitSource = null;
+        private const float SIMULTANEOUS_HIT_WINDOW = 0.1f;
+
         [Header("Health UI Settings")]
         public Image healthUIFill;
         public float healthBarSmoothSpeed = 5f; // Speed for smooth health bar transitions
@@ -40,7 +44,6 @@ namespace Hanzo.Player.Core
 
         [SerializeField]
         private Vector3 respawnPosition = Vector3.zero;
-
 
         [Header("Camera Settings")]
         [SerializeField]
@@ -81,6 +84,8 @@ namespace Hanzo.Player.Core
 
         [Header("Audio Settings")]
         public AudioManager audioManager;
+
+        public Vector3 RespawnPosition => respawnPosition;
 
         private void Awake()
         {
@@ -129,12 +134,12 @@ namespace Hanzo.Player.Core
                 healthUIFill.fillAmount = 1f;
                 healthUIFill.type = Image.Type.Filled;
                 healthUIFill.fillMethod = Image.FillMethod.Horizontal;
-                
+
                 if (colorHealthBar)
                 {
                     healthUIFill.color = healthBarHighColor;
                 }
-                
+
                 Debug.Log("[PlayerHealth] Health UI initialized");
             }
             else
@@ -290,7 +295,7 @@ namespace Hanzo.Player.Core
             {
                 StopCoroutine(damageOverlayCoroutine);
             }
-            
+
             // Start new overlay animation
             damageOverlayCoroutine = StartCoroutine(FadeDamageOverlay());
         }
@@ -303,8 +308,10 @@ namespace Hanzo.Player.Core
             // FLASH: Set overlay to full visibility first
             float maxAlpha = damageColor.a;
             damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, maxAlpha);
-            
-            Debug.Log($"[PlayerHealth] 🩸 Damage overlay flashed (alpha: {maxAlpha}) for local player");
+
+            Debug.Log(
+                $"[PlayerHealth] 🩸 Damage overlay flashed (alpha: {maxAlpha}) for local player"
+            );
 
             // Small delay at full intensity for impact
             yield return new WaitForSeconds(0.1f);
@@ -363,9 +370,13 @@ namespace Hanzo.Player.Core
 
             while (Mathf.Abs(currentFill - targetHealthFill) > 0.001f)
             {
-                currentFill = Mathf.Lerp(currentFill, targetHealthFill, Time.deltaTime * healthBarSmoothSpeed);
+                currentFill = Mathf.Lerp(
+                    currentFill,
+                    targetHealthFill,
+                    Time.deltaTime * healthBarSmoothSpeed
+                );
                 healthUIFill.fillAmount = currentFill;
-                
+
                 // Update color during animation
                 if (colorHealthBar)
                 {
@@ -459,25 +470,60 @@ namespace Hanzo.Player.Core
             if (isDead)
                 return;
 
-            // Apply damage FIRST
+            // ── Damage priority resolution ──────────────────────────────────────
+            // If this hit would kill us, check whether a different source already
+            // landed a lethal blow within the simultaneous-hit window.
+            // The FIRST attacker keeps their kill; the late attacker is ignored
+            // for scoring but damage is still applied.
+            bool wouldKill = (currentHealth - damageAmount) <= 0;
+            bool isSimultaneous = false;
+
+            if (wouldKill && damageSource != null)
+            {
+                float timeSinceLastLethal = Time.time - lastLethalHitTime;
+
+                if (
+                    lastLethalHitSource != null
+                    && lastLethalHitSource != damageSource
+                    && timeSinceLastLethal <= SIMULTANEOUS_HIT_WINDOW
+                )
+                {
+                    // Another source already registered a lethal hit just before us.
+                    // This source arrived late — it still deals damage but does NOT
+                    // get kill credit, and the kill is attributed to the first source.
+                    isSimultaneous = true;
+                    Debug.Log(
+                        $"[PlayerHealth] ⚡ Simultaneous lethal hit detected! "
+                            + $"First attacker: {lastLethalHitSource.name}, "
+                            + $"Late attacker: {damageSource.name} — kill goes to first attacker."
+                    );
+                }
+                else
+                {
+                    // Register this as the first lethal hit.
+                    lastLethalHitTime = Time.time;
+                    lastLethalHitSource = damageSource;
+                }
+            }
+
+            // ── Apply damage ────────────────────────────────────────────────────
             currentHealth -= damageAmount;
             currentHealth = Mathf.Max(0, currentHealth);
 
             Debug.Log(
-                $"[PlayerHealth] {GetPlayerName()} took {damageAmount} damage from {damageType}. Health: {currentHealth}/{maxHealth}"
+                $"[PlayerHealth] {GetPlayerName()} took {damageAmount} {damageType} "
+                    + $"from {damageSource?.name ?? "unknown"}. HP: {currentHealth}/{maxHealth}"
             );
 
-            // Update health UI with smooth animation and color change
             UpdateHealthUI();
 
-            // Show damage overlay and play sound when damage is taken
             if (damageAmount > 0)
             {
                 ShowDamageOverlay();
                 StartCoroutine(DelayedPlayHurtSound(0.95f));
             }
 
-            // Only increment hit counter for Dash damage
+            // ── Hit/score tracking ──────────────────────────────────────────────
             int hitsTaken = 0;
             if (damageType == DamageType.Dash)
             {
@@ -502,11 +548,10 @@ namespace Hanzo.Player.Core
                     );
             }
 
-            // Handle score changes based on damage type (online only)
-            if (!isOfflineMode && damageSource != null && scoreManager != null)
+            // ── Score awarding — only give kill credit to the FIRST attacker ────
+            if (!isSimultaneous && !isOfflineMode && damageSource != null && scoreManager != null)
             {
                 PhotonView sourceView = damageSource.GetComponent<PhotonView>();
-
                 if (
                     sourceView != null
                     && sourceView.Owner != null
@@ -517,26 +562,19 @@ namespace Hanzo.Player.Core
                     if (damageType == DamageType.Dash)
                     {
                         scoreManager.AddDashHitScore(sourceView.Owner.ActorNumber);
-                        Debug.Log(
-                            $"[PlayerHealth] 🎯 Score awarded to {sourceView.Owner.NickName}"
-                        );
+                        Debug.Log($"[PlayerHealth] 🎯 Score → {sourceView.Owner.NickName}");
                     }
                     else if (damageType == DamageType.Explosion)
                     {
                         int actorNum = GetActorNumber();
                         if (actorNum >= 0)
-                        {
                             scoreManager.RemoveExplosionScore(actorNum);
-                            Debug.Log($"[PlayerHealth] 💣 Score deducted from {GetPlayerName()}");
-                        }
                     }
                 }
             }
 
-            // Trigger damage event
             OnDamageTaken?.Invoke(damageAmount, damageSource, damageType);
 
-            // Sync damage to other clients (online only)
             if (!isOfflineMode && photonView != null)
             {
                 try
@@ -546,17 +584,109 @@ namespace Hanzo.Player.Core
                 catch { }
             }
 
-            // Check for death based on health first, then hit count as backup
-            if (currentHealth <= 0)
+            // ── Death check — route through stun/knockback, not DisablePlayer ───
+            bool shouldDie =
+                currentHealth <= 0 || (damageType == DamageType.Dash && hitsTaken >= 8);
+
+            if (shouldDie)
             {
-                Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} died from health depletion!");
-                Die();
+                Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} — triggering stun-death.");
+                DieWithKnockback(damageSource, damageType);
             }
-            else if (damageType == DamageType.Dash && hitsTaken >= 8)
+        }
+
+        /// <summary>
+        /// Instead of instantly disabling the player, applies a knockback+stun
+        /// and then respawns after the stun resolves.  The "dead" state is held
+        /// during the stun window so no further damage is processed.
+        /// </summary>
+        private void DieWithKnockback(GameObject killer, DamageType damageType)
+        {
+            if (isDead)
+                return;
+            isDead = true;
+
+            // Increment death counter
+            if (isOfflineMode)
+                offlineDeaths++;
+            else if (scoreManager != null)
             {
-                Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} died from 8 dash hits!");
-                Die();
+                int actorNum = GetActorNumber();
+                if (actorNum >= 0)
+                    scoreManager.IncrementPlayerDeaths(actorNum);
             }
+
+            OnPlayerDied?.Invoke();
+
+            // ── Calculate knockback direction from killer position ───────────────
+            Vector3 knockbackDir = Vector3.back; // fallback
+            if (killer != null)
+                knockbackDir = (transform.position - killer.transform.position).normalized;
+
+            // Flatten to horizontal — stun handles the Y arc internally
+            knockbackDir.y = 0f;
+            if (knockbackDir == Vector3.zero)
+                knockbackDir = transform.forward * -1f;
+
+            // ── Hand off to PlayerStateController for the full stun pipeline ─────
+            var stateController = GetComponent<PlayerStateController>();
+            if (stateController != null)
+            {
+                // Use a stronger-than-normal knockback force for a death blow
+                float deathKnockbackForce = 18f;
+                float deathStunDuration = 2.5f;
+
+                stateController.ApplyKnockbackAndStun(
+                    knockbackDir,
+                    deathKnockbackForce,
+                    deathStunDuration
+                );
+
+                // Wait for the stun to finish, then respawn
+                StartCoroutine(RespawnAfterStun(stateController, deathStunDuration));
+            }
+            else
+            {
+                // Fallback: no state controller — use the old countdown
+                if (IsLocalPlayer())
+                {
+                    if (respawnCoroutine != null)
+                        StopCoroutine(respawnCoroutine);
+                    respawnCoroutine = StartCoroutine(RespawnCountdown());
+                }
+            }
+
+            // Sync death to remotes
+            if (!isOfflineMode && photonView != null)
+            {
+                try
+                {
+                    photonView.RPC("RPC_SyncDeathState", RpcTarget.AllBuffered);
+                }
+                catch { }
+            }
+        }
+
+        /// <summary>
+        /// Waits for the stun animation to finish (stun duration + get-up anim),
+        /// then triggers a full respawn.  The player stays visible and animated
+        /// throughout — no DisablePlayer() call.
+        /// </summary>
+        private IEnumerator RespawnAfterStun(PlayerStateController stateCtrl, float stunDuration)
+        {
+            // Extra buffer: stun + get-up anim (~0.8 s) + small grace period
+            float waitTime = stunDuration + 1.0f;
+            yield return new WaitForSeconds(waitTime);
+
+            // Make sure stun has actually cleared before we proceed
+            float timeout = 3f;
+            while (stateCtrl.IsStunned && timeout > 0f)
+            {
+                timeout -= Time.deltaTime;
+                yield return null;
+            }
+
+            Respawn();
         }
 
         private void Die()
@@ -638,17 +768,18 @@ namespace Hanzo.Player.Core
 
         private void Respawn()
         {
-            if (!IsLocalPlayer())
-                return;
+            // NOTE: intentionally NO IsLocalPlayer() guard here.
+            // In offline mode every instance is "local", so both AIs reach this.
+            // In online mode each client only calls Respawn() for their own object.
 
             currentHealth = maxHealth;
             isDead = false;
+            lastLethalHitTime = -999f; // reset priority tracker
+            lastLethalHitSource = null;
 
             // Reset hit counter
             if (isOfflineMode)
-            {
                 offlineHitsTaken = 0;
-            }
             else if (scoreManager != null)
             {
                 int actorNum = GetActorNumber();
@@ -657,10 +788,26 @@ namespace Hanzo.Player.Core
             }
 
             transform.position = respawnPosition;
-            EnablePlayer();
-            EnableCamera();
 
-            // Reset health UI to full with animation
+            // Re-enable any components that may have been paused
+            var movementController = GetComponent<PlayerMovementController>();
+            if (movementController != null)
+                movementController.enabled = true;
+
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.isKinematic = false;
+                rb.velocity = Vector3.zero;
+            }
+
+            // Make sure all renderers/colliders are on (in case DisablePlayer was called elsewhere)
+            foreach (var col in GetComponentsInChildren<Collider>())
+                col.enabled = true;
+            foreach (var rend in GetComponentsInChildren<Renderer>())
+                rend.enabled = true;
+
+            // Heal UI
             targetHealthFill = 1f;
             if (healthUIFill != null)
             {
@@ -680,16 +827,14 @@ namespace Hanzo.Player.Core
             // Clear damage overlay
             if (damageOverlay != null)
             {
-                Color transparent = damageColor;
-                transparent.a = 0f;
-                damageOverlay.color = transparent;
+                Color c = damageColor;
+                c.a = 0f;
+                damageOverlay.color = c;
             }
 
-            Debug.Log($"[PlayerHealth] 🔄 {GetPlayerName()} respawned!");
-
+            Debug.Log($"[PlayerHealth] 🔄 {GetPlayerName()} respawned at {respawnPosition}");
             OnPlayerRespawned?.Invoke();
 
-            // Sync respawn (online only)
             if (!isOfflineMode && photonView != null)
             {
                 try
@@ -724,6 +869,15 @@ namespace Hanzo.Player.Core
             if (movementController != null)
                 movementController.enabled = false;
 
+            // Only disable colliders on THIS object and direct children — not grandchildren
+            // that might belong to the environment or camera rigs
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.velocity = Vector3.zero;
+                rb.isKinematic = true; // stops physics entirely — no falling
+            }
+
             foreach (var col in GetComponentsInChildren<Collider>())
                 col.enabled = false;
 
@@ -736,6 +890,10 @@ namespace Hanzo.Player.Core
             var movementController = GetComponent<PlayerMovementController>();
             if (movementController != null)
                 movementController.enabled = true;
+
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null)
+                rb.isKinematic = false;
 
             foreach (var col in GetComponentsInChildren<Collider>())
                 col.enabled = true;
@@ -787,7 +945,7 @@ namespace Hanzo.Player.Core
         {
             if (respawnCoroutine != null)
                 StopCoroutine(respawnCoroutine);
-            
+
             if (damageOverlayCoroutine != null)
                 StopCoroutine(damageOverlayCoroutine);
 

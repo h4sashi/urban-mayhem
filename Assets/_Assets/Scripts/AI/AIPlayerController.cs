@@ -1,933 +1,811 @@
-using UnityEngine;
-using Hanzo.Player.Core;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using Hanzo.Core.Interfaces;
 using Hanzo.Player.Controllers;
+using Hanzo.Player.Core;
 using Hanzo.Player.Input;
-using Photon.Pun;
+using UnityEngine;
 
-namespace Hanzo.AI.Enemies
+namespace Hanzo.AI
 {
     /// <summary>
-    /// Multiplayer-Synced AI Player Controller
-    /// Master Client controls AI logic, syncs to all clients via RPCs
+    /// AI Controller that drives a player prefab with all player components.
+    /// Works seamlessly with PlayerInputHandler, PlayerMovementController, and PlayerHealthComponent.
+    ///
+    /// DESYNC SYSTEM — how simultaneous attacks are prevented:
+    ///
+    ///   1. STARTUP JITTER   — each AI waits a unique random delay before its loop begins,
+    ///                         so loop ticks are never aligned from the first frame.
+    ///   2. ATTACK COOLDOWN  — after every dash attempt the AI draws a fresh random extra
+    ///                         pause before it is allowed to dash again.  Because each AI
+    ///                         draws independently, their attack windows drift apart.
+    ///   3. RESYNC GUARD     — every few seconds each AI re-rolls a small timing nudge,
+    ///                         ensuring that even if two AIs happen to drift back into phase
+    ///                         they will diverge again within one check interval.
     /// </summary>
-    [RequireComponent(typeof(PhotonView))]
-    [RequireComponent(typeof(Rigidbody))]
-    [RequireComponent(typeof(PlayerMovementController))]
-    [RequireComponent(typeof(PlayerStateController))]
     [RequireComponent(typeof(PlayerInputHandler))]
-    public class AIPlayerController : MonoBehaviourPun
+    [RequireComponent(typeof(PlayerMovementController))]
+    [RequireComponent(typeof(PlayerHealthComponent))]
+    public class AIPlayerController : MonoBehaviour
     {
-        [Header("AI Settings")]
-        [SerializeField] private AIBehaviorSettings behaviorSettings;
-        
-        [Header("Detection")]
-        [SerializeField] private LayerMask playerLayer = 1 << 6;
-        [SerializeField] private float detectionRadius = 15f;
-        [SerializeField] private float detectionInterval = 0.1f;
-        [SerializeField] private float loseTargetDistance = 25f;
-        
-        [Header("Combat")]
-        [SerializeField] private float attackRange = 3f;
-        [SerializeField] private float meleeAttackRange = 2.5f;
-        [SerializeField] private float attackCooldown = 1.5f;
-        [SerializeField] private float attackKnockbackForce = 10f;
-        [SerializeField] private float attackStunDuration = 2f;
-        
-        [Header("Combat Behavior")]
-        [SerializeField] private bool enableMeleeAttacks = true;
-        [SerializeField] private bool enableDashAttacks = true;
-        [SerializeField] private float dashAttackMultiplier = 1.5f;
-        [SerializeField] private bool wanderAfterSuccessfulHit = true;
-        [SerializeField] private float wanderAfterHitDuration = 3f;
-        
-        [Header("Movement Behavior")]
-        [SerializeField] private float closeRangeStopDistance = 1.5f;
-        [SerializeField] private float rotationSpeed = 10f;
-        [SerializeField] private bool alwaysFaceTarget = true;
-        
-        [Header("Tactical Behavior")]
-        [SerializeField] private bool enableTacticalRetreat = false;
-        [SerializeField] private float retreatDistance = 8f;
-        [SerializeField] private bool retreatWhenAbilityOnCooldown = true;
-        [SerializeField] private float minRetreatDuration = 2f;
-        
-        [Header("Abilities")]
-        [SerializeField] private bool canUseDash = true;
-        [SerializeField] private bool canUseSpeedBoost = true;
-        [SerializeField] private float dashUsageChance = 0.4f;
-        [SerializeField] private float dashMinDistance = 3f;
-        [SerializeField] private float dashMaxDistance = 10f;
-        [SerializeField] private float dashCooldownTime = 3f;
-        [SerializeField] private float dashDecisionInterval = 0.3f;
-        [SerializeField] private float speedBoostUsageChance = 0.6f;
-        [SerializeField] private float speedBoostMinDistance = 5f;
-        [SerializeField] private float speedBoostMaxDistance = 12f;
-        
-        [Header("Wandering")]
-        [SerializeField] private float wanderRadius = 10f;
-        [SerializeField] private float wanderChangeInterval = 3f;
-        [SerializeField] private float idleWaitTime = 1f;
-        
-        [Header("Collision Detection")]
-        [SerializeField] private float collisionCheckRadius = 1.2f;
-        [SerializeField] private LayerMask attackCollisionLayers = ~0;
-        
-        [Header("Network Sync")]
-        [SerializeField] private float positionSyncRate = 10f; // Updates per second
-        [SerializeField] private float rotationSyncRate = 10f;
-        
+        [Header("AI Behavior Settings")]
+        [SerializeField]
+        private AIBehaviorProfile behaviorProfile;
+
+        [Header("Target Detection")]
+        [SerializeField]
+        private float detectionRadius = 20f;
+
+        [SerializeField]
+        private LayerMask targetLayer;
+
+        [SerializeField]
+        private float visionAngle = 120f;
+
+        [Header("Combat Settings")]
+        [SerializeField]
+        private float dashRange = 8f;
+
+        [SerializeField]
+        private float destructibleDashRange = 12f;
+
+        [SerializeField]
+        private float minDashDistance = 3f;
+
+        [SerializeField]
+        private float speedBoostRange = 15f;
+
+        [SerializeField]
+        private float safeDistance = 5f;
+
+        [Header("Movement Settings")]
+        [SerializeField]
+        private float strafeSpeed = 3f;
+
+        [SerializeField]
+        private float repositionInterval = 2f;
+
+        [SerializeField]
+        private float predictionTime = 0.5f;
+
+        [Header("Decision Making")]
+        [SerializeField]
+        private float decisionInterval = 0.2f;
+
+        [SerializeField]
+        private float reactionTime = 0.1f;
+
+        // NEW — random ranges for loop timing variation
+        [SerializeField]
+        private float reactionTimeMin = 0.08f;
+
+        [SerializeField]
+        private float reactionTimeMax = 0.25f;
+
+        [SerializeField]
+        private float decisionIntervalMin = 0.15f;
+
+        [SerializeField]
+        private float decisionIntervalMax = 0.4f;
+
+        [Header("Patrol Settings")]
+        [SerializeField]
+        private float patrolRadius = 15f;
+
+        [SerializeField]
+        private float waypointReachedDistance = 2f;
+
+        [SerializeField]
+        private float idleTimeAtWaypoint = 1f;
+
         [Header("Debug")]
-        [SerializeField] private bool showDebugInfo = true;
-        [SerializeField] private bool showGizmos = true;
-        
-        // Core components
-        private PlayerMovementController movementController;
-        private PlayerStateController stateController;
+        [SerializeField]
+        private bool showDebugInfo = true;
+
+        [SerializeField]
+        private bool showGizmos = true;
+
+        private Transform _pendingDestructibleTarget;
+
+        // ── Component references ──────────────────────────────────────────────
         private PlayerInputHandler inputHandler;
-        private Rigidbody rb;
-        private Animator animator;
-        
-        // AI State
+        private PlayerMovementController movementController;
+        private PlayerHealthComponent healthComponent;
+        private PlayerStateController stateController;
+        private DashCollisionHandler dashCollisionHandler;
+
+        // ── AI state ──────────────────────────────────────────────────────────
         private AIState currentState = AIState.Idle;
         private Transform currentTarget;
-        private Vector3 wanderTarget;
-        private Vector3 retreatTarget;
-        private float lastDetectionCheck;
-        private float lastAttackTime = -999f;
-        private float lastWanderChange;
-        private float lastDashDecision;
-        private float lastSpeedBoostDecision;
-        private float idleStartTime;
-        private float retreatStartTime;
-        private float postHitWanderStartTime;
-        private Vector3 spawnPosition;
-        private float lastDashTime = -999f;
-        private float lastSpeedBoostTime = -999f;
-        
-        // AI Input
-        private Vector2 aiMoveInput;
-        
-        // Attack tracking
-        private bool hasDamagedThisFrame = false;
-        private Transform lastDamagedTarget;
-        private float lastDamageTime;
-        private bool justHitPlayer = false;
-        
-        // Network sync
-        private Vector3 networkPosition;
-        private Quaternion networkRotation;
-        private float lastPositionSyncTime;
-        private float lastRotationSyncTime;
-        
-        // Animation hashes
-        private static readonly int RunHash = Animator.StringToHash("RUN");
-        private static readonly int DashHash = Animator.StringToHash("DASH");
-        
-        private enum AIState
-        {
-            Idle,
-            Wandering,
-            Chasing,
-            Attacking,
-            Retreating
-        }
-        
+        private Vector3 moveDirection;
+        private Vector3 lastKnownTargetPosition;
+        private float lastDecisionTime;
+        private float lastRepositionTime;
+        private bool isExecutingDash;
+        private bool isExecutingSpeedBoost;
+        private bool isDyingStun;
+
+        // ── Patrol state ──────────────────────────────────────────────────────
+        private Vector3 patrolCenter;
+        private Vector3 currentWaypoint;
+        private float idleTimer;
+        private bool isWaitingAtWaypoint;
+
+        // ── Evasion ───────────────────────────────────────────────────────────
+        private Vector3 evasionDirection;
+        private float evasionTimer;
+        private const float EVASION_DURATION = 1f;
+
+        // ── Desync timing ─────────────────────────────────────────────────────
+        // personalAttackDelay is this AI's running extra pause that is re-drawn
+        // after every attack and periodically nudged by the resync guard.
+        private float personalAttackDelay = 0f;
+        private float attackCooldownTimer = 0f; // counts down; dash blocked while > 0
+        private float resyncTimer = 0f; // counts down to next timing nudge
+
+        // ── Coroutines ────────────────────────────────────────────────────────
+        private Coroutine aiLoopCoroutine;
+
+        // ── Properties ───────────────────────────────────────────────────────
+        public AIState CurrentState => currentState;
+        public Transform CurrentTarget => currentTarget;
+
+        // ─────────────────────────────────────────────────────────────────────
+        // LIFECYCLE
+        // ─────────────────────────────────────────────────────────────────────
+
         private void Awake()
         {
-            movementController = GetComponent<PlayerMovementController>();
-            stateController = GetComponent<PlayerStateController>();
             inputHandler = GetComponent<PlayerInputHandler>();
-            rb = GetComponent<Rigidbody>();
-            animator = GetComponentInChildren<Animator>(true);
-            
-            if (behaviorSettings == null)
+            movementController = GetComponent<PlayerMovementController>();
+            healthComponent = GetComponent<PlayerHealthComponent>();
+            stateController = GetComponent<PlayerStateController>();
+            dashCollisionHandler = GetComponent<DashCollisionHandler>();
+
+            if (inputHandler == null || !inputHandler.IsAIControlled())
+                Debug.LogError("[AI] PlayerInputHandler did not detect AIPlayerController!");
+
+            if (behaviorProfile == null)
             {
-                Debug.LogError("[AI] AIBehaviorSettings not assigned!");
+                behaviorProfile = ScriptableObject.CreateInstance<AIBehaviorProfile>();
+                behaviorProfile.Initialize();
+                Debug.LogWarning("[AI] No behavior profile assigned, using defaults");
             }
-            
-            if (inputHandler == null)
-            {
-                Debug.LogError("[AI] PlayerInputHandler is REQUIRED but missing!");
-            }
-            
-            spawnPosition = transform.position;
-            networkPosition = transform.position;
-            networkRotation = transform.rotation;
+
+            patrolCenter = transform.position;
+
+            if (healthComponent != null)
+                healthComponent.SetRespawnPosition(transform.position);
+
+            // Seed this AI's first personal attack delay with a unique random value
+            // so no two AIs on the same frame begin with the same rhythm.
+            RollNewAttackCooldown();
+            resyncTimer = behaviorProfile.resyncCheckInterval;
         }
-        
-        private void Start()
+
+        private void OnEnable()
         {
-            // Only Master Client controls AI logic
-            if (!PhotonNetwork.IsMasterClient && PhotonNetwork.IsConnected)
+            if (healthComponent != null)
             {
-                // Other clients: disable AI logic, only receive network updates
-                this.enabled = false;
-                return;
+                healthComponent.OnDamageTaken += OnDamageTaken;
+                healthComponent.OnPlayerDied += OnDeath;
+                healthComponent.OnPlayerRespawned += OnRespawn;
+                healthComponent.OnPlayerDied += () =>
+                {
+                    isDyingStun = true;
+                    StopMovement();
+                };
             }
-            
-            ChangeState(AIState.Idle);
-            
-            Debug.Log($"[AI] {gameObject.name} initialized as MASTER CLIENT - Melee: {enableMeleeAttacks}, Dash: {enableDashAttacks}");
+
+            if (aiLoopCoroutine != null)
+                StopCoroutine(aiLoopCoroutine);
+            aiLoopCoroutine = StartCoroutine(AILoop());
         }
-        
+
+        private void OnDisable()
+        {
+            if (healthComponent != null)
+            {
+                healthComponent.OnDamageTaken -= OnDamageTaken;
+                healthComponent.OnPlayerDied -= OnDeath;
+                healthComponent.OnPlayerRespawned -= OnRespawn;
+            }
+            if (aiLoopCoroutine != null)
+                StopCoroutine(aiLoopCoroutine);
+        }
+
         private void Update()
         {
-            // Master Client: Run AI logic
-            if (PhotonNetwork.IsMasterClient || !PhotonNetwork.IsConnected)
+            // Tick the attack cooldown timer every frame for accuracy
+            if (attackCooldownTimer > 0f)
+                attackCooldownTimer -= Time.deltaTime;
+
+            // Periodic resync guard — nudge this AI's timing so it can't
+            // accidentally lock back in phase with another AI over a long fight.
+            if (resyncTimer > 0f)
             {
-                UpdateAILogic();
-                SyncTransformToNetwork();
-            }
-            // Other Clients: Interpolate to network position
-            else
-            {
-                InterpolateTransform();
+                resyncTimer -= Time.deltaTime;
+                if (resyncTimer <= 0f)
+                {
+                    float nudge = Random.Range(0f, behaviorProfile.resyncJitterMax);
+                    attackCooldownTimer += nudge;
+                    resyncTimer = behaviorProfile.resyncCheckInterval;
+
+                    if (showDebugInfo)
+                        Debug.Log($"[AI:{name}] Resync nudge +{nudge:F3}s applied.");
+                }
             }
         }
-        
-        #region AI Logic (Master Client Only)
-        
-        private void UpdateAILogic()
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MAIN AI LOOP
+        // ─────────────────────────────────────────────────────────────────────
+
+        private IEnumerator AILoop()
         {
-            hasDamagedThisFrame = false;
-            
-            if (stateController.IsStunned)
+            float startupJitter = Random.Range(0f, behaviorProfile.startupJitterMax);
+            yield return new WaitForSeconds(startupJitter);
+
+            if (showDebugInfo)
+                Debug.Log($"[AI:{name}] Loop started after {startupJitter:F3}s startup jitter.");
+
+            while (true)
             {
-                aiMoveInput = Vector2.zero;
-                SendInputToController();
+                bool paused =
+                    !healthComponent.IsAlive
+                    || (stateController != null && stateController.IsStunned);
+
+                if (paused)
+                {
+                    StopMovement();
+                    yield return new WaitForSeconds(0.5f);
+                    continue;
+                }
+
+                // Each tick draws a fresh random reaction time and decision interval
+                // so no two AIs ever share the same loop cadence for long
+                float thisReaction = Random.Range(reactionTimeMin, reactionTimeMax);
+                float thisDecision = Random.Range(decisionIntervalMin, decisionIntervalMax);
+
+                yield return new WaitForSeconds(thisReaction);
+
+                MakeDecisions();
+                ExecuteCurrentState();
+
+                yield return new WaitForSeconds(thisDecision);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // DECISION MAKING
+        // ─────────────────────────────────────────────────────────────────────
+
+        private void MakeDecisions()
+        {
+            if (!healthComponent.IsAlive)
+                return;
+
+            if (evasionTimer > 0)
+            {
+                currentState = AIState.Evading;
                 return;
             }
-            
-            DetectPlayers();
-            
-            switch (currentState)
+
+            FindTarget();
+
+            if (currentTarget != null)
             {
-                case AIState.Idle:
-                    UpdateIdle();
-                    break;
-                case AIState.Wandering:
-                    UpdateWandering();
-                    break;
-                case AIState.Chasing:
-                    UpdateChasing();
-                    break;
-                case AIState.Attacking:
-                    UpdateAttacking();
-                    break;
-                case AIState.Retreating:
-                    UpdateRetreating();
-                    break;
-            }
-            
-            if (alwaysFaceTarget && currentTarget != null)
-            {
-                FaceTarget(currentTarget.position);
-            }
-            
-            if (enableDashAttacks && movementController?.DashAbility != null && movementController.DashAbility.IsActive)
-            {
-                CheckDashCollisions();
-            }
-            
-            SendInputToController();
-        }
-        
-        #endregion
-        
-        #region Network Sync
-        
-        private void SyncTransformToNetwork()
-        {
-            if (!PhotonNetwork.IsConnected) return;
-            
-            // Sync position
-            if (Time.time - lastPositionSyncTime > 1f / positionSyncRate)
-            {
-                lastPositionSyncTime = Time.time;
-                if (Vector3.Distance(transform.position, networkPosition) > 0.1f)
+                float dist = Vector3.Distance(transform.position, currentTarget.position);
+
+                if (dist <= dashRange && dist >= minDashDistance && CanUseDash())
                 {
-                    networkPosition = transform.position;
-                    photonView.RPC("RPC_SyncPosition", RpcTarget.Others, transform.position);
+                    currentState = AIState.Dashing;
                 }
-            }
-            
-            // Sync rotation
-            if (Time.time - lastRotationSyncTime > 1f / rotationSyncRate)
-            {
-                lastRotationSyncTime = Time.time;
-                if (Quaternion.Angle(transform.rotation, networkRotation) > 5f)
+                // NEW — check for a nearby destructible worth launching at the target
+                else if (CanUseDash() && HasLaunchableDestructibleToward(currentTarget))
                 {
-                    networkRotation = transform.rotation;
-                    photonView.RPC("RPC_SyncRotation", RpcTarget.Others, transform.rotation);
+                    currentState = AIState.DashingDestructible;
                 }
-            }
-        }
-        
-        private void InterpolateTransform()
-        {
-            // Smooth interpolation for other clients
-            transform.position = Vector3.Lerp(transform.position, networkPosition, Time.deltaTime * 15f);
-            transform.rotation = Quaternion.Slerp(transform.rotation, networkRotation, Time.deltaTime * 15f);
-        }
-        
-        [PunRPC]
-        private void RPC_SyncPosition(Vector3 position)
-        {
-            networkPosition = position;
-        }
-        
-        [PunRPC]
-        private void RPC_SyncRotation(Quaternion rotation)
-        {
-            networkRotation = rotation;
-        }
-        
-        [PunRPC]
-        private void RPC_SyncState(int stateIndex)
-        {
-            currentState = (AIState)stateIndex;
-            Debug.Log($"[AI Remote] State synced: {currentState}");
-        }
-        
-        [PunRPC]
-        private void RPC_TriggerDash()
-        {
-            // Trigger dash visuals on all clients
-            if (inputHandler != null)
-            {
-                inputHandler.TriggerAIDash();
-            }
-            Debug.Log($"[AI Remote] Dash VFX triggered");
-        }
-        
-        [PunRPC]
-        private void RPC_TriggerSpeedBoost()
-        {
-            // Trigger speed boost visuals on all clients
-            if (inputHandler != null)
-            {
-                inputHandler.TriggerAISpeedBoost();
-            }
-            Debug.Log($"[AI Remote] Speed Boost VFX triggered");
-        }
-        
-        [PunRPC]
-        private void RPC_TriggerAttack(Vector3 targetPosition)
-        {
-            // Sync attack animation on all clients
-            if (animator != null)
-            {
-                // Play attack animation if you have one
-                // animator.SetTrigger("Attack");
-            }
-            Debug.Log($"[AI Remote] Attack animation triggered");
-        }
-        
-        #endregion
-        
-        #region Player Detection
-        
-        private void DetectPlayers()
-        {
-            if (wanderAfterSuccessfulHit && justHitPlayer)
-            {
-                float timeSinceHit = Time.time - postHitWanderStartTime;
-                if (timeSinceHit < wanderAfterHitDuration)
+                else if (dist <= safeDistance)
                 {
-                    return;
+                    currentState = AIState.Evading;
+                    InitiateEvasion();
+                }
+                else if (dist <= speedBoostRange && CanUseSpeedBoost())
+                {
+                    currentState = AIState.SpeedBoosting;
                 }
                 else
                 {
-                    justHitPlayer = false;
+                    currentState = AIState.Chasing;
                 }
             }
-            
-            Collider[] hits = Physics.OverlapSphere(
-                transform.position, 
-                detectionRadius, 
-                playerLayer,
-                QueryTriggerInteraction.Ignore
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // STATE EXECUTION
+        // ─────────────────────────────────────────────────────────────────────
+
+        private void ExecuteCurrentState()
+        {
+            switch (currentState)
+            {
+                case AIState.Idle:
+                    ExecuteIdle();
+                    break;
+                case AIState.Patrolling:
+                    ExecutePatrol();
+                    break;
+                case AIState.Chasing:
+                    ExecuteChase();
+                    break;
+                case AIState.Dashing:
+                    ExecuteDash();
+                    break;
+                case AIState.SpeedBoosting:
+                    ExecuteSpeedBoost();
+                    break;
+                case AIState.Evading:
+                    ExecuteEvasion();
+                    break;
+                case AIState.DashingDestructible:
+                    ExecuteDestructibleDash();
+                    break;
+            }
+        }
+
+        private void ExecuteIdle() => StopMovement();
+
+        private void ExecutePatrol()
+        {
+            if (Vector3.Distance(transform.position, currentWaypoint) < waypointReachedDistance)
+            {
+                if (!isWaitingAtWaypoint)
+                {
+                    isWaitingAtWaypoint = true;
+                    idleTimer = idleTimeAtWaypoint;
+                    StopMovement();
+                }
+                else
+                {
+                    idleTimer -= decisionInterval;
+                    if (idleTimer <= 0)
+                    {
+                        // Drift the center toward where we just arrived
+                        // so the next waypoint fans out from here, not spawn
+                        patrolCenter = Vector3.Lerp(patrolCenter, currentWaypoint, 0.4f);
+                        GenerateNewWaypoint();
+                        isWaitingAtWaypoint = false;
+                    }
+                }
+            }
+            else
+            {
+                MoveInDirection((currentWaypoint - transform.position).normalized);
+            }
+        }
+
+        /// <summary>
+        /// Returns true if there's a destructible object between the AI and its
+        /// target that's worth dashing into — i.e. it's closer than the target
+        /// and roughly on the path toward them.
+        /// </summary>
+        private bool HasLaunchableDestructibleToward(Transform target)
+        {
+            if (target == null)
+                return false;
+
+            Collider[] nearby = Physics.OverlapSphere(
+                transform.position,
+                destructibleDashRange,
+                dashCollisionHandler != null ? dashCollisionHandler.DestructibleLayer : ~0
             );
-            
-            Transform closestPlayer = null;
-            float closestDistance = float.MaxValue;
-            
-            foreach (var hit in hits)
+
+            Vector3 toTarget = (target.position - transform.position).normalized;
+
+            foreach (var col in nearby)
             {
-                if (hit.transform == transform) continue;
-                
-                var playerController = hit.GetComponent<PlayerMovementController>();
-                if (playerController == null) continue;
-                
-                if (hit.GetComponent<AIPlayerController>() != null) continue;
-                
-                float distance = Vector3.Distance(transform.position, hit.transform.position);
-                
-                if (distance < closestDistance)
+                // Must be a recognised destructible tag
+                if (!IsDestructibleTag(col.tag))
+                    continue;
+
+                Vector3 toObj = (col.transform.position - transform.position).normalized;
+                float angle = Vector3.Angle(toTarget, toObj);
+
+                // Only pursue objects that are roughly between the AI and the target
+                if (angle < 45f)
                 {
-                    closestDistance = distance;
-                    closestPlayer = hit.transform;
-                }
-            }
-            
-            if (closestPlayer != null)
-            {
-                bool targetChanged = currentTarget != closestPlayer;
-                currentTarget = closestPlayer;
-                
-                if (targetChanged)
-                {
-                    Debug.Log($"[AI] New target acquired: {closestPlayer.name} at {closestDistance:F2}m");
-                }
-                
-                if (currentState == AIState.Retreating)
-                {
-                    if (Time.time - retreatStartTime < minRetreatDuration)
-                        return;
-                }
-                
-                if (closestDistance <= meleeAttackRange)
-                {
-                    if (currentState != AIState.Attacking)
-                    {
-                        Debug.Log($"[AI] PRIORITY: ENTERING ATTACK STATE - Distance: {closestDistance:F2}m");
-                        ChangeState(AIState.Attacking);
-                    }
-                }
-                else if (closestDistance <= attackRange)
-                {
-                    if (currentState != AIState.Attacking && currentState != AIState.Retreating)
-                    {
-                        Debug.Log($"[AI] ENTERING ATTACK STATE - Distance: {closestDistance:F2}m");
-                        ChangeState(AIState.Attacking);
-                    }
-                }
-                else if (currentState != AIState.Chasing && currentState != AIState.Retreating)
-                {
-                    Debug.Log($"[AI] ENTERING CHASE STATE - Distance: {closestDistance:F2}m");
-                    ChangeState(AIState.Chasing);
-                }
-            }
-            else
-            {
-                if (currentTarget != null)
-                {
-                    Debug.Log("[AI] Target lost - wandering");
-                    currentTarget = null;
-                    ChangeState(AIState.Wandering);
-                }
-            }
-        }
-        
-        #endregion
-        
-        #region State Updates
-        
-        private void UpdateIdle()
-        {
-            aiMoveInput = Vector2.zero;
-            
-            if (Time.time - idleStartTime > idleWaitTime)
-            {
-                ChangeState(AIState.Wandering);
-            }
-        }
-        
-        private void UpdateWandering()
-        {
-            if (Time.time - lastWanderChange > wanderChangeInterval)
-            {
-                lastWanderChange = Time.time;
-                wanderTarget = GetRandomWanderPoint();
-            }
-            
-            Vector3 direction = (wanderTarget - transform.position);
-            direction.y = 0;
-            
-            if (direction.magnitude > 1.5f)
-            {
-                direction.Normalize();
-                aiMoveInput = new Vector2(direction.x, direction.z);
-            }
-            else
-            {
-                aiMoveInput = Vector2.zero;
-                ChangeState(AIState.Idle);
-            }
-        }
-        
-        private void UpdateChasing()
-        {
-            if (currentTarget == null)
-            {
-                aiMoveInput = Vector2.zero;
-                ChangeState(AIState.Wandering);
-                return;
-            }
-            
-            float distance = Vector3.Distance(transform.position, currentTarget.position);
-            
-            if (distance > loseTargetDistance)
-            {
-                currentTarget = null;
-                aiMoveInput = Vector2.zero;
-                ChangeState(AIState.Wandering);
-                return;
-            }
-            
-            // Try speed boost
-            if (canUseSpeedBoost && 
-                Time.time - lastSpeedBoostDecision > dashDecisionInterval)
-            {
-                lastSpeedBoostDecision = Time.time;
-                
-                if (distance >= speedBoostMinDistance && 
-                    distance <= speedBoostMaxDistance &&
-                    CanUseSpeedBoostAbility() &&
-                    Random.value < speedBoostUsageChance)
-                {
-                    TryUseSpeedBoost();
-                }
-            }
-            
-            // Try dash
-            if (canUseDash && Time.time - lastDashDecision > dashDecisionInterval)
-            {
-                lastDashDecision = Time.time;
-                
-                if (distance >= dashMinDistance && 
-                    distance <= dashMaxDistance && 
-                    CanUseDashAbility() &&
-                    Random.value < dashUsageChance)
-                {
-                    TryUseDash();
-                }
-            }
-            
-            Vector3 direction = (currentTarget.position - transform.position);
-            direction.y = 0;
-            direction.Normalize();
-            
-            aiMoveInput = new Vector2(direction.x, direction.z);
-            
-            if (distance <= attackRange)
-            {
-                ChangeState(AIState.Attacking);
-            }
-        }
-        
-        private void UpdateAttacking()
-        {
-            if (currentTarget == null)
-            {
-                aiMoveInput = Vector2.zero;
-                ChangeState(AIState.Wandering);
-                return;
-            }
-            
-            float distance = Vector3.Distance(transform.position, currentTarget.position);
-            
-            if (distance > attackRange * 1.8f)
-            {
-                ChangeState(AIState.Chasing);
-                return;
-            }
-            
-            if (distance > meleeAttackRange)
-            {
-                Vector3 direction = (currentTarget.position - transform.position).normalized;
-                direction.y = 0;
-                aiMoveInput = new Vector2(direction.x, direction.z);
-            }
-            else
-            {
-                aiMoveInput = Vector2.zero;
-            }
-            
-            if (distance <= meleeAttackRange)
-            {
-                float timeSinceLastAttack = Time.time - lastAttackTime;
-                bool canAttack = timeSinceLastAttack >= attackCooldown;
-                
-                if (canAttack)
-                {
-                    PerformMeleeAttack();
-                }
-            }
-        }
-        
-        private void UpdateRetreating()
-        {
-            if (currentTarget == null)
-            {
-                ChangeState(AIState.Wandering);
-                return;
-            }
-            
-            Vector3 directionFromTarget = (transform.position - currentTarget.position).normalized;
-            retreatTarget = transform.position + directionFromTarget * retreatDistance;
-            
-            Vector3 direction = (retreatTarget - transform.position);
-            direction.y = 0;
-            
-            if (direction.magnitude > 1f)
-            {
-                direction.Normalize();
-                aiMoveInput = new Vector2(direction.x, direction.z);
-            }
-            else
-            {
-                aiMoveInput = Vector2.zero;
-            }
-            
-            float timeSinceRetreat = Time.time - retreatStartTime;
-            float distanceFromTarget = Vector3.Distance(transform.position, currentTarget.position);
-            
-            if (timeSinceRetreat > minRetreatDuration && 
-                (distanceFromTarget >= retreatDistance * 0.8f || !ShouldRetreat()))
-            {
-                Debug.Log("[AI] Retreat complete - re-engaging");
-                ChangeState(AIState.Chasing);
-            }
-        }
-        
-        #endregion
-        
-        #region Tactical Decisions
-        
-        private bool ShouldRetreat()
-        {
-            if (!enableTacticalRetreat || currentTarget == null)
-                return false;
-            
-            float timeSinceLastAttack = Time.time - lastAttackTime;
-            if (timeSinceLastAttack < attackCooldown * 0.5f)
-            {
-                return false;
-            }
-            
-            if (retreatWhenAbilityOnCooldown && canUseDash)
-            {
-                if (!CanUseDashAbility())
-                {
+                    _pendingDestructibleTarget = col.transform;
                     return true;
                 }
             }
-            
             return false;
         }
-        
-        private bool CanUseDashAbility()
+
+        private bool IsDestructibleTag(string tag)
         {
-            if (movementController?.DashAbility == null)
-                return false;
-            
-            return Time.time - lastDashTime >= dashCooldownTime && 
-                   movementController.DashAbility.CooldownRemaining <= 0f;
+            return tag == "LightObject"
+                || tag == "HeavyObject"
+                || tag == "Crate"
+                || tag == "Barrel"
+                || tag == "Explosive"
+                || tag == "Fragile";
         }
-        
-        private bool CanUseSpeedBoostAbility()
+
+        private void ExecuteDestructibleDash()
         {
-            return movementController != null;
-        }
-        
-        #endregion
-        
-        #region Input Simulation
-        
-        private void SendInputToController()
-        {
-            if (inputHandler == null)
-            {
-                Debug.LogError("[AI] PlayerInputHandler is null!");
+            if (_pendingDestructibleTarget == null || isExecutingDash)
                 return;
-            }
-            
-            inputHandler.SetAIInput(aiMoveInput);
+            StartCoroutine(ExecuteDestructibleDashSequence(_pendingDestructibleTarget));
+            _pendingDestructibleTarget = null;
         }
-        
-        #endregion
-        
-        #region Abilities
-        
-        private void TryUseDash()
+
+        private IEnumerator ExecuteDestructibleDashSequence(Transform destructible)
         {
-            if (inputHandler == null || currentTarget == null) return;
-            
-            if (!CanUseDashAbility()) return;
-            
-            inputHandler.TriggerAIDash();
-            lastDashTime = Time.time;
-            
-            // Sync dash to all clients
-            if (PhotonNetwork.IsConnected)
-            {
-                photonView.RPC("RPC_TriggerDash", RpcTarget.Others);
-            }
-            
-            Debug.Log($"[AI] DASHING towards {currentTarget.name}!");
+            isExecutingDash = true;
+
+            // Dash straight at the object
+            Vector3 dirToObj = (destructible.position - transform.position).normalized;
+            MoveInDirection(dirToObj);
+            yield return new WaitForSeconds(0.1f);
+
+            if (inputHandler != null)
+                inputHandler.TriggerAIDash();
+
+            RollNewAttackCooldown();
+            yield return new WaitForSeconds(0.5f);
+
+            isExecutingDash = false;
         }
-        
-        private void TryUseSpeedBoost()
-        {
-            if (inputHandler == null || currentTarget == null) return;
-            
-            if (!CanUseSpeedBoostAbility()) return;
-            
-            inputHandler.TriggerAISpeedBoost();
-            lastSpeedBoostTime = Time.time;
-            
-            // Sync speed boost to all clients
-            if (PhotonNetwork.IsConnected)
-            {
-                photonView.RPC("RPC_TriggerSpeedBoost", RpcTarget.Others);
-            }
-            
-            Debug.Log($"[AI] SPEED BOOST activated - closing gap to {currentTarget.name}!");
-        }
-        
-        #endregion
-        
-        #region Combat
-        
-        private void PerformMeleeAttack()
+
+        private void ExecuteChase()
         {
             if (currentTarget == null)
-            {
-                Debug.LogWarning("[AI] PerformMeleeAttack called but no target!");
                 return;
-            }
-            
-            PlayerStateController targetState = currentTarget.GetComponent<PlayerStateController>();
-            
-            if (targetState == null)
+
+            Vector3 predictedPosition = PredictTargetPosition(currentTarget);
+            lastKnownTargetPosition = predictedPosition;
+            Vector3 direction = (predictedPosition - transform.position).normalized;
+
+            if (Time.time - lastRepositionTime > repositionInterval)
             {
-                Debug.LogWarning($"[AI] Target {currentTarget.name} has no PlayerStateController!");
-                return;
-            }
-            
-            if (targetState.IsStunned)
-            {
-                Debug.Log($"[AI] Target already stunned, skipping attack");
-                return;
-            }
-            
-            Vector3 knockbackDir = (currentTarget.position - transform.position).normalized;
-            
-            targetState.ApplyKnockbackAndStun(
-                knockbackDir,
-                attackKnockbackForce,
-                attackStunDuration
-            );
-            
-            lastAttackTime = Time.time;
-            
-            // Sync attack animation to all clients
-            if (PhotonNetwork.IsConnected)
-            {
-                photonView.RPC("RPC_TriggerAttack", RpcTarget.Others, currentTarget.position);
-            }
-            
-            if (wanderAfterSuccessfulHit)
-            {
-                justHitPlayer = true;
-                postHitWanderStartTime = Time.time;
-                currentTarget = null;
-                ChangeState(AIState.Wandering);
-                Debug.Log($"[AI] ✓✓✓ HIT SUCCESSFUL! Wandering for {wanderAfterHitDuration}s before re-engaging");
-            }
-            else
-            {
-                Debug.Log($"[AI] ✓✓✓ MELEE ATTACK EXECUTED on {currentTarget.name}! Next attack in {attackCooldown}s");
-            }
-        }
-        
-        private void CheckDashCollisions()
-        {
-            if (hasDamagedThisFrame) return;
-            
-            Collider[] hits = Physics.OverlapSphere(
-                transform.position,
-                collisionCheckRadius,
-                attackCollisionLayers,
-                QueryTriggerInteraction.Ignore
-            );
-            
-            foreach (var hit in hits)
-            {
-                if (hit.transform == transform) continue;
-                
-                PlayerStateController targetState = hit.GetComponent<PlayerStateController>();
-                if (targetState == null) continue;
-                
-                if (hit.GetComponent<AIPlayerController>() != null) continue;
-                
-                // Check for clash
-                PlayerMovementController targetMovement = hit.GetComponent<PlayerMovementController>();
-                if (targetMovement != null && targetMovement.DashAbility != null && targetMovement.DashAbility.IsActive)
+                lastRepositionTime = Time.time;
+                if (Random.value < behaviorProfile.strafeProbability)
                 {
-                    Debug.Log($"[AI] CLASH! Both dashing - Player {hit.name} wins!");
-                    
-                    Vector3 knockbackDir = (transform.position - hit.transform.position).normalized;
-                    stateController.ApplyKnockbackAndStun(
-                        knockbackDir,
-                        attackKnockbackForce * dashAttackMultiplier,
-                        attackStunDuration
-                    );
-                    
-                    hasDamagedThisFrame = true;
-                    return;
+                    Vector3 strafeDir = Vector3.Cross(direction, Vector3.up).normalized;
+                    strafeDir *= Random.value > 0.5f ? 1f : -1f;
+                    direction = (direction + strafeDir * 0.5f).normalized;
                 }
-                
-                if (lastDamagedTarget == hit.transform && Time.time - lastDamageTime < 0.5f)
-                    continue;
-                
-                Vector3 knockbackDir2 = (hit.transform.position - transform.position).normalized;
-                
-                targetState.ApplyKnockbackAndStun(
-                    knockbackDir2,
-                    attackKnockbackForce * dashAttackMultiplier,
-                    attackStunDuration
-                );
-                
-                hasDamagedThisFrame = true;
-                lastDamagedTarget = hit.transform;
-                lastDamageTime = Time.time;
-                
-                Debug.Log($"[AI] DASH HIT {hit.name}!");
-                break;
             }
+
+            MoveInDirection(direction);
         }
-        
-        private void FaceTarget(Vector3 targetPosition)
+
+        private void ExecuteDash()
         {
-            Vector3 lookDirection = (targetPosition - transform.position);
-            lookDirection.y = 0;
-            
-            if (lookDirection.magnitude > 0.1f)
-            {
-                Quaternion targetRotation = Quaternion.LookRotation(lookDirection);
-                transform.rotation = Quaternion.Slerp(
-                    transform.rotation,
-                    targetRotation,
-                    Time.deltaTime * rotationSpeed
-                );
-            }
+            if (currentTarget == null || isExecutingDash)
+                return;
+
+            Vector3 predictedPosition = PredictTargetPosition(currentTarget);
+            Vector3 dashDirection = (predictedPosition - transform.position).normalized;
+            StartCoroutine(ExecuteDashSequence(dashDirection));
         }
-        
-        #endregion
-        
-        #region State Management
-        
-        private void ChangeState(AIState newState)
+
+        private IEnumerator ExecuteDashSequence(Vector3 direction)
         {
-            if (currentState == newState) return;
-            
-            AIState oldState = currentState;
-            
-            switch (currentState)
-            {
-                case AIState.Chasing:
-                case AIState.Wandering:
-                case AIState.Attacking:
-                case AIState.Retreating:
-                    aiMoveInput = Vector2.zero;
-                    break;
-            }
-            
-            currentState = newState;
-            
-            // Sync state to all clients
-            if (PhotonNetwork.IsConnected)
-            {
-                photonView.RPC("RPC_SyncState", RpcTarget.Others, (int)newState);
-            }
-            
-            switch (newState)
-            {
-                case AIState.Idle:
-                    idleStartTime = Time.time;
-                    aiMoveInput = Vector2.zero;
-                    break;
-                    
-                case AIState.Wandering:
-                    lastWanderChange = Time.time;
-                    wanderTarget = GetRandomWanderPoint();
-                    break;
-                    
-                case AIState.Attacking:
-                    aiMoveInput = Vector2.zero;
-                    Debug.Log($"[AI] Entered ATTACKING state - Cooldown ready: {(Time.time - lastAttackTime) >= attackCooldown}");
-                    break;
-                    
-                case AIState.Retreating:
-                    retreatStartTime = Time.time;
-                    if (currentTarget != null)
-                    {
-                        Vector3 directionFromTarget = (transform.position - currentTarget.position).normalized;
-                        retreatTarget = transform.position + directionFromTarget * retreatDistance;
-                    }
-                    Debug.Log($"[AI] RETREATING to recharge abilities");
-                    break;
-            }
-            
+            isExecutingDash = true;
+
+            MoveInDirection(direction);
+            yield return new WaitForSeconds(0.1f);
+
+            if (inputHandler != null)
+                inputHandler.TriggerAIDash();
+
+            // After the dash fires, draw a fresh random cooldown.
+            // This is the core of the desync — each AI independently
+            // rolls its own next-attack window, so they can never align.
+            RollNewAttackCooldown();
+
+            yield return new WaitForSeconds(0.5f);
+
+            isExecutingDash = false;
+        }
+
+        private void ExecuteSpeedBoost()
+        {
+            if (isExecutingSpeedBoost)
+                return;
+            StartCoroutine(ExecuteSpeedBoostSequence());
+        }
+
+        private IEnumerator ExecuteSpeedBoostSequence()
+        {
+            isExecutingSpeedBoost = true;
+
+            if (inputHandler != null)
+                inputHandler.TriggerAISpeedBoost();
+
+            currentState = AIState.Chasing;
+            yield return new WaitForSeconds(2f);
+
+            isExecutingSpeedBoost = false;
+        }
+
+        private void ExecuteEvasion()
+        {
+            MoveInDirection(evasionDirection);
+            evasionTimer -= decisionInterval;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // HELPERS
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Rolls a new random attack cooldown for this AI instance.
+        /// Called on Awake (to seed the first window) and after every dash
+        /// (to keep the AI's rhythm unique going forward).
+        /// </summary>
+        private void RollNewAttackCooldown()
+        {
+            float newCooldown = Random.Range(
+                behaviorProfile.attackCooldownMin,
+                behaviorProfile.attackCooldownMax
+            );
+            // Add on top of any remaining cooldown so we never undercut ourselves.
+            attackCooldownTimer = Mathf.Max(attackCooldownTimer, 0f) + newCooldown;
+
             if (showDebugInfo)
+                Debug.Log(
+                    $"[AI:{name}] New attack cooldown: {newCooldown:F3}s "
+                        + $"(total pending: {attackCooldownTimer:F3}s)"
+                );
+        }
+
+        private void FindTarget()
+        {
+            Collider[] potentialTargets = Physics.OverlapSphere(
+                transform.position,
+                detectionRadius,
+                targetLayer
+            );
+
+            float closestDistance = Mathf.Infinity;
+            Transform closestTarget = null;
+
+            foreach (var col in potentialTargets)
             {
-                Debug.Log($"[AI] {gameObject.name}: {oldState} -> {newState}");
+                if (col.transform.root == transform.root)
+                    continue;
+
+                Vector3 dir = (col.transform.position - transform.position).normalized;
+                float angle = Vector3.Angle(transform.forward, dir);
+                if (angle > visionAngle / 2f)
+                    continue;
+
+                var targetHealth = col.GetComponentInParent<PlayerHealthComponent>();
+                if (targetHealth != null && !targetHealth.IsAlive)
+                    continue;
+
+                float distance = Vector3.Distance(transform.position, col.transform.position);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestTarget = col.transform;
+                }
+            }
+
+            currentTarget = closestTarget;
+        }
+
+        private Vector3 PredictTargetPosition(Transform target)
+        {
+            if (target == null)
+                return lastKnownTargetPosition;
+
+            Rigidbody targetRb = target.GetComponentInParent<Rigidbody>();
+            if (targetRb != null)
+                return target.position + targetRb.velocity * predictionTime;
+
+            return target.position;
+        }
+
+        private void MoveInDirection(Vector3 direction)
+        {
+            direction.y = 0;
+            direction.Normalize();
+
+            if (inputHandler != null)
+                inputHandler.SetAIInput(new Vector2(direction.x, direction.z));
+
+            moveDirection = direction;
+        }
+
+        private void StopMovement()
+        {
+            if (inputHandler != null)
+                inputHandler.SetAIInput(Vector2.zero);
+            moveDirection = Vector3.zero;
+        }
+
+        private void GenerateNewWaypoint()
+        {
+            Vector2 randomCircle = Random.insideUnitCircle * patrolRadius;
+            currentWaypoint = patrolCenter + new Vector3(randomCircle.x, 0, randomCircle.y);
+        }
+
+        private void InitiateEvasion()
+        {
+            if (currentTarget == null)
+                return;
+
+            Vector3 awayFromTarget = (transform.position - currentTarget.position).normalized;
+            Vector3 randomOffset = new Vector3(
+                Random.Range(-1f, 1f),
+                0,
+                Random.Range(-1f, 1f)
+            ).normalized;
+
+            evasionDirection = (awayFromTarget + randomOffset * 0.3f).normalized;
+            evasionTimer = EVASION_DURATION;
+        }
+
+        /// <summary>
+        /// Dash is available only when:
+        ///   • the ability itself is off cooldown (engine side), AND
+        ///   • this AI's personal attack cooldown has expired (desync side).
+        /// </summary>
+        private bool CanUseDash()
+        {
+            if (movementController == null || movementController.DashAbility == null)
+                return false;
+
+            // Personal attack cooldown must have drained to zero.
+            if (attackCooldownTimer > 0f)
+                return false;
+
+            return movementController.DashAbility.CanActivate && !isExecutingDash;
+        }
+
+        private bool CanUseSpeedBoost()
+        {
+            return !isExecutingSpeedBoost
+                && Random.value < behaviorProfile.speedBoostUseProbability;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // EVENT HANDLERS
+        // ─────────────────────────────────────────────────────────────────────
+
+        private void OnDamageTaken(float damage, GameObject source, DamageType damageType)
+        {
+            if (!healthComponent.IsAlive || isDyingStun)
+                return;
+
+            if (source != null && Random.value < behaviorProfile.evasionOnDamageChance)
+            {
+                evasionDirection = (transform.position - source.transform.position).normalized;
+                evasionTimer = EVASION_DURATION;
+                currentState = AIState.Evading;
             }
         }
-        
-        #endregion
-        
-        #region Helpers
-        
-        private Vector3 GetRandomWanderPoint()
+
+        private void OnDeath()
         {
-            Vector2 randomCircle = Random.insideUnitCircle * wanderRadius;
-            Vector3 randomPoint = spawnPosition + new Vector3(randomCircle.x, 0, randomCircle.y);
-            randomPoint.y = transform.position.y;
-            return randomPoint;
+            StopMovement();
+            currentState = AIState.Idle;
+            currentTarget = null;
         }
-        
-        #endregion
-        
-        #region Debug
-        
+
+        private void OnRespawn()
+        {
+            patrolCenter =
+                healthComponent != null ? healthComponent.RespawnPosition : transform.position;
+
+            isExecutingDash = false;
+            isExecutingSpeedBoost = false;
+            isDyingStun = false;
+            evasionTimer = 0f;
+            currentTarget = null;
+
+            // Re-seed attack timing on respawn so a just-respawned AI
+            // doesn't immediately sync up with a still-fighting opponent.
+            RollNewAttackCooldown();
+            resyncTimer = behaviorProfile.resyncCheckInterval;
+
+            GenerateNewWaypoint();
+            currentState = AIState.Patrolling;
+
+            Debug.Log($"[AI:{name}] Respawned. Patrolling from {patrolCenter}");
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // DEBUG
+        // ─────────────────────────────────────────────────────────────────────
+
         private void OnDrawGizmos()
         {
-            if (!showGizmos) return;
-            
+            if (!showGizmos)
+                return;
+
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(transform.position, detectionRadius);
-            
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireSphere(transform.position, attackRange);
-            
-            Gizmos.color = new Color(1, 0.5f, 0, 0.5f);
-            Gizmos.DrawWireSphere(transform.position, meleeAttackRange);
-            
-            Gizmos.color = new Color(1, 0, 0, 0.3f);
-            Gizmos.DrawWireSphere(transform.position, closeRangeStopDistance);
-            
-            if (enableDashAttacks)
+
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawLine(
+                transform.position,
+                transform.position
+                    + Quaternion.Euler(0, -visionAngle / 2f, 0)
+                        * transform.forward
+                        * detectionRadius
+            );
+            Gizmos.DrawLine(
+                transform.position,
+                transform.position
+                    + Quaternion.Euler(0, visionAngle / 2f, 0) * transform.forward * detectionRadius
+            );
+
+            if (currentTarget != null)
             {
-                Gizmos.color = new Color(0, 1, 1, 0.3f);
-                Gizmos.DrawWireSphere(transform.position, collisionCheckRadius);
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(transform.position, currentTarget.position);
+                Gizmos.DrawWireSphere(currentTarget.position, 0.5f);
             }
-            
-            if (canUseDash)
-            {
-                Gizmos.color = new Color(0, 1, 1, 0.2f);
-                Gizmos.DrawWireSphere(transform.position, dashMinDistance);
-                Gizmos.color = new Color(0, 1, 1, 0.1f);
-                Gizmos.DrawWireSphere(transform.position, dashMaxDistance);
-            }
-            if(currentTarget != null)
+
+            if (currentState == AIState.Patrolling)
             {
                 Gizmos.color = Color.green;
-                Gizmos.DrawLine(transform.position, currentTarget.position);
+                Gizmos.DrawWireSphere(currentWaypoint, 0.5f);
+                Gizmos.DrawLine(transform.position, currentWaypoint);
+            }
+
+            if (currentState == AIState.Evading)
+            {
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawRay(transform.position, evasionDirection * 3f);
             }
         }
-        #endregion
+
+        private void OnGUI()
+        {
+            if (!showDebugInfo)
+                return;
+
+            GUILayout.BeginArea(new Rect(Screen.width - 320, 10, 310, 280));
+            GUILayout.Label($"=== AI: {gameObject.name} ===");
+            GUILayout.Label($"State: {currentState}");
+            GUILayout.Label($"Target: {(currentTarget != null ? currentTarget.name : "None")}");
+            GUILayout.Label(
+                $"Health: {healthComponent?.CurrentHealth:F1}/{healthComponent?.MaxHealth:F1}"
+            );
+
+            if (currentTarget != null)
+                GUILayout.Label(
+                    $"Distance: {Vector3.Distance(transform.position, currentTarget.position):F1}m"
+                );
+
+            GUILayout.Label($"Can Dash: {CanUseDash()}");
+            GUILayout.Label($"Attack Cooldown: {Mathf.Max(0f, attackCooldownTimer):F2}s");
+            GUILayout.Label($"Resync in: {Mathf.Max(0f, resyncTimer):F1}s");
+            GUILayout.Label($"Stunned: {stateController?.IsStunned ?? false}");
+            GUILayout.Label($"Falling: {stateController?.IsFalling ?? false}");
+
+            if (evasionTimer > 0)
+                GUILayout.Label($"Evading: {evasionTimer:F1}s");
+
+            GUILayout.EndArea();
+        }
+    }
+
+    public enum AIState
+    {
+        Idle,
+        Patrolling,
+        Chasing,
+        Dashing,
+        DashingDestructible,
+        SpeedBoosting,
+        Evading,
     }
 }

@@ -71,6 +71,13 @@ namespace Hanzo.Player.Controllers
         [SerializeField]
         private bool verboseLogging = true;
 
+        [Header("Destructible Launch Settings")]
+        [SerializeField]
+        private float launchTargetSearchRadius = 20f;
+
+        [SerializeField]
+        private LayerMask launchTargetLayer; // same as AI's targetLayer
+
         private PhotonView photonView;
         private PlayerAbilityController abilityController;
         public PlayerMovementController playerMovementController;
@@ -85,6 +92,8 @@ namespace Hanzo.Player.Controllers
         // Debug info
         private int framesSinceDashActive = 0;
         private Vector3 lastDetectionPos;
+
+        public LayerMask DestructibleLayer => destructibleLayer;
 
         private void Awake()
         {
@@ -115,8 +124,6 @@ namespace Hanzo.Player.Controllers
 
             DiagnoseLayerConfiguration();
         }
-
-       
 
         private void DiagnoseLayerConfiguration()
         {
@@ -314,8 +321,10 @@ namespace Hanzo.Player.Controllers
                     knockbackForce *= 1.5f;
                 }
 
-                Vector3 forceDirection = knockbackDir;
-                forceDirection.y = destructibleUpwardForce;
+                Vector3 forceDirection = GetAimedLaunchDirection(
+                    hitCollider.transform.position,
+                    knockbackDir
+                );
                 forceDirection.Normalize();
 
                 Vector3 force = forceDirection * knockbackForce;
@@ -352,6 +361,53 @@ namespace Hanzo.Player.Controllers
                 lastDestructibleHitTime = Time.time;
             }
         }
+
+        // <summary>
+/// Finds the nearest valid target within launchTargetSearchRadius of the
+/// impact point and returns a direction aimed at them, blended with the
+/// natural knockback so it never feels perfectly scripted.
+/// Falls back to natural knockback direction if no target is found.
+/// </summary>
+private Vector3 GetAimedLaunchDirection(Vector3 impactPoint, Vector3 naturalKnockback)
+{
+    Collider[] candidates = Physics.OverlapSphere(
+        impactPoint, launchTargetSearchRadius, launchTargetLayer);
+
+    float     closestDist   = Mathf.Infinity;
+    Transform closestTarget = null;
+
+    foreach (var col in candidates)
+    {
+        // Don't aim back at the dasher
+        if (col.transform.root == transform.root) continue;
+
+        var health = col.GetComponentInParent<PlayerHealthComponent>();
+        if (health != null && !health.IsAlive) continue;
+
+        float d = Vector3.Distance(impactPoint, col.transform.position);
+        if (d < closestDist)
+        {
+            closestDist   = d;
+            closestTarget = col.transform;
+        }
+    }
+
+    Vector3 baseDir;
+    if (closestTarget != null)
+    {
+        Vector3 toTarget = (closestTarget.position - impactPoint).normalized;
+        // Blend 70% aimed, 30% natural so it doesn't feel like a laser
+        baseDir = (toTarget * 0.7f + naturalKnockback * 0.3f).normalized;
+    }
+    else
+    {
+        baseDir = naturalKnockback;
+    }
+
+    // Preserve the upward arc
+    baseDir.y = destructibleUpwardForce;
+    return baseDir.normalized;
+}
 
         // ========== IDamageDealer Implementation ==========
 

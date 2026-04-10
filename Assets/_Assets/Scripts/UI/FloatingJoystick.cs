@@ -62,17 +62,17 @@ namespace Hanzo.UI
             }
 
             // Start invisible
-            if (fadeWhenNotUsed)
-            {
-                canvasGroup.alpha = 0f;
-            }
-            else
-            {
-                canvasGroup.alpha = inactiveAlpha;
-            }
+            // if (fadeWhenNotUsed)
+            // {
+            //     canvasGroup.alpha = 0f;
+            // }
+            // else
+            // {
+            //     canvasGroup.alpha = inactiveAlpha;
+            // }
 
             // Hide joystick at start
-            joystickContainer.gameObject.SetActive(false);
+            // joystickContainer.gameObject.SetActive(false);
         }
 
         private void Start()

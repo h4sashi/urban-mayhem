@@ -10,21 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: df11024747f53490c894ffd917c93077, type: 3}
-  m_Name: AIBehaviorSettings
+  m_Name: AI Easy
   m_EditorClassIdentifier: 
-  moveSpeed: 5
-  acceleration: 15
-  rotationSpeed: 540
-  detectionRadius: 15
-  detectionInterval: 0.2
-  loseTargetDistance: 25
-  attackRange: 2
-  attackCooldown: 1.5
-  attackKnockbackForce: 10
-  attackStunDuration: 2
-  wanderRadius: 10
-  wanderChangeInterval: 3
-  idleWaitTime: 2
-  persistentChase: 1
-  aggressiveMode: 0
-  dashChance: 0.3
+  aggressiveness: 1
+  dashUseProbability: 1
+  speedBoostUseProbability: 0.32
+  evasionOnDamageChance: 0.7
+  strafeProbability: 0.5
+  reactionTime: 0.2
+  predictionAccuracy: 0.7
+  decisionInterval: 0.2
+  recklessness: 0.87
+  targetPersistence: 1
+  waypointIdleTime: 2.64
+  patrolRadius: 15

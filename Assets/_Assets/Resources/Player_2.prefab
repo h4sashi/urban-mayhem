@@ -233,7 +233,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 462301677252107258}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.064631246, y: 0.000000014596157, z: -9.453441e-10, w: 0.99790925}
+  m_LocalRotation: {x: 0.120063774, y: -0.000000018437111, z: 0.0000000022297588, w: 0.9927662}
   m_LocalPosition: {x: 0, y: 3.0454545, z: -6.418182}
   m_LocalScale: {x: 0.7142857, y: 0.7142857, z: 0.7142857}
   m_ConstrainProportionsScale: 0
@@ -265,7 +265,7 @@ MonoBehaviour:
     FieldOfView: 60
     OrthographicSize: 5
     NearClipPlane: 0.3
-    FarClipPlane: 250
+    FarClipPlane: 180
     Dutch: 0
     ModeOverride: 0
     LensShift: {x: 0, y: 0}
@@ -436,7 +436,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &4733451266880683119
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1118,7 +1118,7 @@ MonoBehaviour:
   invertVertical: 0
   canvasGroup: {fileID: 1057420145170826931}
   activeAlpha: 1
-  inactiveAlpha: 0.3
+  inactiveAlpha: 1
 --- !u!1 &2072493248502667462
 GameObject:
   m_ObjectHideFlags: 0
@@ -4701,7 +4701,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &753291322331717486
 RectTransform:
   m_ObjectHideFlags: 0

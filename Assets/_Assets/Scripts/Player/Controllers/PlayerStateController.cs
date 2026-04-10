@@ -92,7 +92,9 @@ namespace Hanzo.Player.Controllers
         private Rigidbody rb;
         private Animator animator;
         private StunVFXController vfxController;
-        [SerializeField]private AudioSource audioSource;
+
+        [SerializeField]
+        private AudioSource audioSource;
 
         // Offline compatibility
         private bool isOfflineMode = false;
@@ -124,7 +126,6 @@ namespace Hanzo.Player.Controllers
             animator = GetComponentInChildren<Animator>(true);
             vfxController = GetComponent<StunVFXController>();
 
-           
             if (audioSource == null)
             {
                 foreach (var t_child in this.GetComponentsInChildren<AudioSource>())
@@ -136,7 +137,7 @@ namespace Hanzo.Player.Controllers
                     }
                 }
             }
-            
+
             // Configure 3D spatial audio with distance-based falloff
             audioSource.playOnAwake = false;
             audioSource.spatialBlend = 1f; // Full 3D sound
@@ -144,8 +145,10 @@ namespace Hanzo.Player.Controllers
             audioSource.minDistance = audioMinDistance;
             audioSource.maxDistance = audioMaxDistance;
             audioSource.dopplerLevel = 0f; // Disable doppler for gameplay sounds
-            
-            Debug.Log($"[{name}] AudioSource configured: Min={audioMinDistance}m, Max={audioMaxDistance}m, Rolloff={audioRolloffMode}");
+
+            Debug.Log(
+                $"[{name}] AudioSource configured: Min={audioMinDistance}m, Max={audioMaxDistance}m, Rolloff={audioRolloffMode}"
+            );
 
             // Check if we're in offline mode
             CheckOfflineMode();
@@ -423,16 +426,31 @@ namespace Hanzo.Player.Controllers
             }
         }
 
-        private void StartStun(float duration)
+        /// <summary>
+        /// Cancels any active ability animations so stun cleanly overrides them.
+        /// Called at the top of StartStun for both player and AI.
+        /// </summary>
+        private void ClearAbilityStates()
         {
-            if (isStunned)
+            if (animator == null)
                 return;
-
-            if (stunCoroutine != null)
-                StopCoroutine(stunCoroutine);
-
-            stunCoroutine = StartCoroutine(StunCoroutine(duration));
+            animator.SetBool("DASH", false);
+            animator.SetBool("SPEEDBOOST", false);
+            // Add any other ability bools here as you expand the system
         }
+
+      private void StartStun(float duration)
+{
+    if (isStunned) return;
+
+    // NEW: kill any ability animation before stun takes over
+    ClearAbilityStates();
+
+    if (stunCoroutine != null)
+        StopCoroutine(stunCoroutine);
+
+    stunCoroutine = StartCoroutine(StunCoroutine(duration));
+}
 
         private IEnumerator StunCoroutine(float duration)
         {
