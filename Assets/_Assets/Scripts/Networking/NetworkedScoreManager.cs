@@ -31,7 +31,9 @@ namespace Hanzo.Networking
         private const string SCORE_KEY = "PlayerScore";
         private const string HITS_TAKEN_KEY = "HitsTaken";
         private const string KILLS_KEY = "Kills";
+
         private const string DEATHS_KEY = "Deaths";
+        
 
         // In NetworkedScoreManager
         public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>(aiNames);
@@ -425,8 +427,6 @@ namespace Hanzo.Networking
             return 0;
         }
 
-      
-
         /// <summary>
         /// Called when player properties are updated
         /// </summary>
@@ -466,6 +466,27 @@ namespace Hanzo.Networking
                     );
                 }
             }
+        }
+
+        /// <summary>
+        /// Awards leaderboard-eligible score to a player based on hits taken.
+        /// Called for both human and AI attackers.
+        /// </summary>
+        public void AddHitReceivedScore(int victimActorNumber)
+        {
+            PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(victimActorNumber);
+            if (player == null)
+                return;
+
+            int currentScore = GetPlayerScore(victimActorNumber);
+            int newScore = currentScore + scoreForDashHit; // reuse existing config
+
+            playerScores[victimActorNumber] = newScore;
+
+            Hashtable props = new Hashtable { { SCORE_KEY, newScore } };
+            player.SetCustomProperties(props);
+
+            Debug.Log($"[ScoreManager] Hit received → {player.NickName} score now {newScore}");
         }
 
         /// <summary>

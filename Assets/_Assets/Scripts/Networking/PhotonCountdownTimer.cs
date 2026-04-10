@@ -83,7 +83,6 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             CheckIfShouldStartCountdown();
     }
 
-
     void Update()
     {
         if (!countdownStarted || gameOverTriggered)
@@ -197,44 +196,48 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         Debug.Log("[Timer] Playables activated via RPC on all clients");
     }
 
-  private void StartCountdown()
-{
-    if (countdownStarted)
+    private void StartCountdown()
     {
-        Debug.LogWarning("[Timer] StartCountdown called but already started.");
-        return;
+        if (countdownStarted)
+        {
+            Debug.LogWarning("[Timer] StartCountdown called but already started.");
+            return;
+        }
+
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            Debug.LogWarning("[Timer] StartCountdown called but not Master Client.");
+            return;
+        }
+
+        // Guard against photonView still being null
+        if (photonView == null)
+        {
+            Debug.LogError(
+                "[Timer] Cannot start countdown — PhotonView is null. "
+                    + "Ensure PhotonView component exists on this GameObject."
+            );
+            return;
+        }
+
+        startTime = PhotonNetwork.Time;
+        countdownStarted = true;
+
+        photonView.RPC("RPC_ActivatePlayables", RpcTarget.All);
+
+        ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
+        {
+            { "CountdownStartTime", startTime },
+            { "CountdownStarted", true },
+        };
+        PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+
+        photonView.RPC("RPC_SyncCountdownStart", RpcTarget.Others, startTime);
+
+        Debug.Log(
+            $"[Timer] Countdown started at PhotonTime={startTime}. Duration={countdownDuration}s"
+        );
     }
-
-    if (!PhotonNetwork.IsMasterClient)
-    {
-        Debug.LogWarning("[Timer] StartCountdown called but not Master Client.");
-        return;
-    }
-
-    // Guard against photonView still being null
-    if (photonView == null)
-    {
-        Debug.LogError("[Timer] Cannot start countdown — PhotonView is null. " +
-                       "Ensure PhotonView component exists on this GameObject.");
-        return;
-    }
-
-    startTime        = PhotonNetwork.Time;
-    countdownStarted = true;
-
-    photonView.RPC("RPC_ActivatePlayables", RpcTarget.All);
-
-    ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
-    {
-        { "CountdownStartTime", startTime },
-        { "CountdownStarted",   true      },
-    };
-    PhotonNetwork.CurrentRoom.SetCustomProperties(props);
-
-    photonView.RPC("RPC_SyncCountdownStart", RpcTarget.Others, startTime);
-
-    Debug.Log($"[Timer] Countdown started at PhotonTime={startTime}. Duration={countdownDuration}s");
-}
 
     [PunRPC]
     private void RPC_SyncCountdownStart(double syncedStartTime)

@@ -566,13 +566,6 @@ namespace Hanzo.Player.Core
                         scoreManager.AddAIDashHitScore(aiId);
                         Debug.Log($"[PlayerHealth] 🤖 AI Kill Score → {damageSource.name}");
                     }
-                    // else if (damageType == DamageType.Explosion)
-                    // {
-                    //     // Explosion penalty still applies to the victim
-                    //     int actorNum = GetActorNumber();
-                    //     if (actorNum >= 0)
-                    //         scoreManager.RemoveExplosionScore(actorNum);
-                    // }
                 }
                 else if (
                     sourceView != null
@@ -587,6 +580,7 @@ namespace Hanzo.Player.Core
                         scoreManager.AddDashHitScore(sourceView.Owner.ActorNumber);
                         Debug.Log($"[PlayerHealth] 🎯 Score → {sourceView.Owner.NickName}");
                     }
+
                     // else if (damageType == DamageType.Explosion)
                     // {
                     //     int actorNum = GetActorNumber();
@@ -597,6 +591,17 @@ namespace Hanzo.Player.Core
             }
 
             OnDamageTaken?.Invoke(damageAmount, damageSource, damageType);
+
+            // ── Award hit-based score to victim (registers for leaderboard) ─────────
+            if (damageType == DamageType.Dash && !isOfflineMode && scoreManager != null)
+            {
+                int actorNum = GetActorNumber();
+                if (actorNum >= 0)
+                {
+                    scoreManager.AddHitReceivedScore(actorNum);
+                    Debug.Log($"[PlayerHealth] 📊 Hit-based score awarded to {GetPlayerName()}");
+                }
+            }
 
             if (!isOfflineMode && photonView != null)
             {
