@@ -137,6 +137,78 @@ namespace Hanzo.Traps
             }
         }
 
+
+        public void ActivateTrap()
+{
+    if (hasDetonated) return;
+
+    if (trapType == TrapType.TimedDetonation)
+    {
+        // Sync activation across all clients
+        if (PhotonNetwork.IsConnected && photonView != null)
+            photonView.RPC("RPC_ActivateTrap", RpcTarget.All);
+        else
+            StartCoroutine(TimedDetonationRoutine());
+    }
+}
+
+[PunRPC]
+private void RPC_ActivateTrap()
+{
+    if (hasDetonated) return;
+    StartCoroutine(TimedDetonationRoutine());
+}
+
+public void Detonate()
+{
+    if (hasDetonated) return;
+
+    // Only Master Client or offline owner triggers the RPC
+    if (PhotonNetwork.IsConnected && photonView != null)
+    {
+        if (PhotonNetwork.IsMasterClient || photonView.IsMine)
+            photonView.RPC("RPC_Detonate", RpcTarget.All);
+    }
+    else
+    {
+        ExecuteDetonate();
+    }
+}
+
+[PunRPC]
+private void RPC_Detonate()
+{
+    ExecuteDetonate();
+}
+
+private void ExecuteDetonate()
+{
+    if (hasDetonated) return;
+    hasDetonated = true;
+    countdownActive = false;
+
+    PlayDetonationSound();
+
+    if (showDamageIndicator)
+    {
+        foreach (var data in playerIndicators.Values)
+        {
+            if (data.isShown && data.manager != null)
+                data.manager.HideIndicator(transform);
+        }
+    }
+
+    if (detonationImpactVFX != null)
+        Instantiate(detonationImpactVFX, transform.position, Quaternion.identity);
+
+    ApplyExplosionForce();
+
+    trapHandler?.OnTrapDetonated(gameObject);
+    StartCoroutine(DisableTrapAfterDelay(0.8f));
+}
+
+
+
         private void PlayDetonationSound()
         {
             if (PhotonNetwork.IsConnected && photonView != null)
@@ -345,9 +417,9 @@ namespace Hanzo.Traps
         void OnCollisionEnter(Collision collision)
         {
             if (trapType == TrapType.CollisionDetonation && !hasDetonated && detonateOnCollision)
-            {
-                Detonate();
-            }
+    {
+        Detonate(); // Now routes through RPC_Detonate on all clients
+    }
         }
 
         IEnumerator TimedDetonationRoutine()
@@ -475,45 +547,8 @@ namespace Hanzo.Traps
             transform.localRotation = originalRotation;
         }
 
-        public void ActivateTrap()
-        {
-            if (hasDetonated)
-                return;
 
-            if (trapType == TrapType.TimedDetonation)
-            {
-                StartCoroutine(TimedDetonationRoutine());
-            }
-        }
-
-        public void Detonate()
-        {
-            if (hasDetonated)
-                return;
-            hasDetonated = true;
-            countdownActive = false;
-
-            PlayDetonationSound();
-
-            if (showDamageIndicator)
-            {
-                foreach (var data in playerIndicators.Values)
-                {
-                    if (data.isShown && data.manager != null)
-                    {
-                        data.manager.HideIndicator(transform);
-                    }
-                }
-            }
-
-            if (detonationImpactVFX != null)
-                Instantiate(detonationImpactVFX, transform.position, Quaternion.identity);
-
-            ApplyExplosionForce();
-
-            trapHandler?.OnTrapDetonated(gameObject);
-            StartCoroutine(DisableTrapAfterDelay(0.8f));
-        }
+      
 
         IEnumerator DisableTrapAfterDelay(float delay)
         {

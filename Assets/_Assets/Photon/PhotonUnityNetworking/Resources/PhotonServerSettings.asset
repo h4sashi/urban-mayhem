@@ -67,6 +67,9 @@ MonoBehaviour:
   - RPC_TriggerAttack
   - RPC_TriggerDash
   - RPC_TriggerSpeedBoost
+  - RPC_SyncCountdownStart
+  - RPC_ActivateTrap
+  - RPC_Detonate
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

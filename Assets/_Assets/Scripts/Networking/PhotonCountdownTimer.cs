@@ -61,26 +61,28 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
     private bool gameOverTriggered = false;
     private PhotonView photonView;
 
+    private void Awake()
+    {
+        photonView = GetComponent<PhotonView>();
+
+        if (photonView == null)
+            Debug.LogError(
+                "[Timer] PhotonView is null in Awake! "
+                    + "Add a PhotonView component to this GameObject."
+            );
+    }
+
     void Start()
     {
+        // photonView already assigned in Awake
         SetGameObjects(false);
-        
-        photonView = GetComponent<PhotonView>();
-        if (photonView == null)
-        {
-            Debug.LogError(
-                "[Timer] PhotonView not found! Add PhotonView component to this GameObject."
-            );
-        }
-
         UpdateTimerDisplay(countdownDuration);
         InitializeRadialFill();
 
         if (PhotonNetwork.InRoom)
-        {
             CheckIfShouldStartCountdown();
-        }
     }
+
 
     void Update()
     {
@@ -195,31 +197,56 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         Debug.Log("[Timer] Playables activated via RPC on all clients");
     }
 
-    private void StartCountdown()
+  private void StartCountdown()
+{
+    if (countdownStarted)
+    {
+        Debug.LogWarning("[Timer] StartCountdown called but already started.");
+        return;
+    }
+
+    if (!PhotonNetwork.IsMasterClient)
+    {
+        Debug.LogWarning("[Timer] StartCountdown called but not Master Client.");
+        return;
+    }
+
+    // Guard against photonView still being null
+    if (photonView == null)
+    {
+        Debug.LogError("[Timer] Cannot start countdown — PhotonView is null. " +
+                       "Ensure PhotonView component exists on this GameObject.");
+        return;
+    }
+
+    startTime        = PhotonNetwork.Time;
+    countdownStarted = true;
+
+    photonView.RPC("RPC_ActivatePlayables", RpcTarget.All);
+
+    ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
+    {
+        { "CountdownStartTime", startTime },
+        { "CountdownStarted",   true      },
+    };
+    PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+
+    photonView.RPC("RPC_SyncCountdownStart", RpcTarget.Others, startTime);
+
+    Debug.Log($"[Timer] Countdown started at PhotonTime={startTime}. Duration={countdownDuration}s");
+}
+
+    [PunRPC]
+    private void RPC_SyncCountdownStart(double syncedStartTime)
     {
         if (countdownStarted)
             return;
 
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            Debug.LogWarning("[Timer] Only Master Client can start countdown!");
-            return;
-        }
-
-        startTime = PhotonNetwork.Time;
+        startTime = syncedStartTime;
         countdownStarted = true;
+        SetGameObjects(true);
 
-        // FIXED: Use RPC to activate playables on ALL clients
-        photonView.RPC("RPC_ActivatePlayables", RpcTarget.All);
-
-        ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
-        {
-            { "CountdownStartTime", startTime },
-            { "CountdownStarted", true },
-        };
-        PhotonNetwork.CurrentRoom.SetCustomProperties(props);
-
-        Debug.Log($"[Timer] Countdown started! Duration: {countdownDuration}s");
+        Debug.Log($"[Timer] Countdown synced via RPC. StartTime={startTime}");
     }
 
     private void CheckIfShouldStartCountdown()
@@ -264,10 +291,10 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
                 startTime = (double)
                     PhotonNetwork.CurrentRoom.CustomProperties["CountdownStartTime"];
                 countdownStarted = true;
-                
+
                 // FIXED: When syncing, also activate playables for late joiners
                 SetGameObjects(true);
-                
+
                 Debug.Log("[Timer] Synced countdown from room properties");
             }
         }
@@ -293,7 +320,7 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
             {
                 playerObj.SetActive(false);
             });
-        
+
         if (countdownTimerObject != null)
         {
             countdownTimerObject.SetActive(false);
@@ -340,7 +367,7 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
                 {
                     playerObj.GetComponent<PlayerMovementController>().enabled = false;
                 });
-            
+
             if (countdownTimerObject != null)
             {
                 countdownTimerObject.SetActive(false);
@@ -394,10 +421,22 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
 
     public void ManualStartCountdown()
     {
-        if (PhotonNetwork.IsMasterClient)
+        Debug.Log(
+            $"[Timer] ManualStartCountdown called. "
+                + $"IsMaster={PhotonNetwork.IsMasterClient}, "
+                + $"AlreadyStarted={countdownStarted}, "
+                + $"InRoom={PhotonNetwork.InRoom}"
+        );
+
+        if (!PhotonNetwork.IsMasterClient)
         {
-            StartCountdown();
+            Debug.LogWarning("[Timer] ManualStartCountdown ignored — not Master Client.");
+            return;
         }
+
+        // Force-clear the guard so a re-call after AI spawn always works
+        countdownStarted = false;
+        StartCountdown();
     }
 
     public float GetRemainingTime()

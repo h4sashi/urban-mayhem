@@ -3724,6 +3724,10 @@ MonoBehaviour:
   destructibleHitSound: {fileID: 8300000, guid: 6e14ce764820b4048945ff6e640a793f, type: 3}
   showDebugGizmos: 0
   verboseLogging: 0
+  launchTargetSearchRadius: 20
+  launchTargetLayer:
+    serializedVersion: 2
+    m_Bits: 0
   playerMovementController: {fileID: 3675924095626907759}
 --- !u!114 &40971509302726724
 MonoBehaviour:

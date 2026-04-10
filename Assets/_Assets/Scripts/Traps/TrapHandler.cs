@@ -37,15 +37,28 @@ namespace Hanzo.Traps
         {
             for (int i = 0; i < poolSize; i++)
             {
-                GameObject trap = Instantiate(trapPrefab);
+                GameObject trap;
+
+                // Use PhotonNetwork.Instantiate so the trap exists on all clients
+                if (PhotonNetwork.IsConnected && PhotonNetwork.InRoom)
+                {
+                    trap = PhotonNetwork.Instantiate(
+                        trapPrefab.name,
+                        Vector3.zero,
+                        Quaternion.identity
+                    );
+                }
+                else
+                {
+                    trap = Instantiate(trapPrefab);
+                }
+
                 trap.SetActive(false);
 
-                // Disable Trap component initially
                 Trap trapScript = trap.GetComponent<Trap>();
                 if (trapScript != null)
                 {
                     trapScript.enabled = false;
-                    // Register callback for when trap is destroyed
                     trapScript.SetTrapHandler(this);
                 }
 
@@ -54,22 +67,43 @@ namespace Hanzo.Traps
         }
 
         GameObject GetTrapFromPool()
-{
-    // Use PhotonNetwork.Instantiate instead of regular Instantiate
-    GameObject trap = PhotonNetwork.Instantiate(
-        trapPrefab.name, // Must match prefab name in Resources folder
-        Vector3.zero,
-        Quaternion.identity
-    );
-    
-    Trap trapScript = trap.GetComponent<Trap>();
-    if (trapScript != null)
-    {
-        trapScript.SetTrapHandler(this);
-    }
-    
-    return trap;
-}
+        {
+            // Use pooled object if available
+            if (trapPool.Count > 0)
+            {
+                GameObject pooled = trapPool.Dequeue();
+                if (pooled != null)
+                {
+                    Trap trapScript = pooled.GetComponent<Trap>();
+                    if (trapScript != null)
+                        trapScript.SetTrapHandler(this);
+                    return pooled;
+                }
+            }
+
+            // Pool exhausted — instantiate a new one
+            Debug.LogWarning("[TrapHandler] Pool exhausted, instantiating new trap.");
+            GameObject trap;
+            if (PhotonNetwork.IsConnected && PhotonNetwork.InRoom)
+            {
+                trap = PhotonNetwork.Instantiate(
+                    trapPrefab.name,
+                    Vector3.zero,
+                    Quaternion.identity
+                );
+            }
+            else
+            {
+                trap = Instantiate(trapPrefab);
+            }
+
+            Trap ts = trap.GetComponent<Trap>();
+            if (ts != null)
+                ts.SetTrapHandler(this);
+
+            return trap;
+        }
+
         void ReturnTrapToPool(GameObject trap)
         {
             // Reset trap state
@@ -80,16 +114,19 @@ namespace Hanzo.Traps
 
         void ResetTrap(GameObject trap)
         {
-            // Remove dynamically added components
+            // Disable rather than destroy so components remain for next activation
             Rigidbody rb = trap.GetComponent<Rigidbody>();
             if (rb != null)
-                Destroy(rb);
+            {
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                rb.isKinematic = true;
+            }
 
             MeshCollider meshCol = trap.GetComponent<MeshCollider>();
             if (meshCol != null)
-                Destroy(meshCol);
+                meshCol.enabled = false;
 
-            // Reset Trap script (this will disable emission)
             Trap trapScript = trap.GetComponent<Trap>();
             if (trapScript != null)
             {
@@ -97,7 +134,6 @@ namespace Hanzo.Traps
                 trapScript.ResetTrap();
             }
 
-            // Reset transform
             trap.transform.parent = spawnTransform;
             trap.transform.localPosition = Vector3.zero;
             trap.transform.localRotation = Quaternion.identity;
@@ -177,26 +213,33 @@ namespace Hanzo.Traps
         {
             trap.transform.parent = null;
 
-            MeshCollider meshCol = trap.AddComponent<MeshCollider>();
-            meshCol.convex = useConvexCollider;
+            // Enable pre-existing collider and rigidbody from prefab
+            // instead of adding them dynamically (dynamic adds don't sync over network)
+            MeshCollider meshCol = trap.GetComponent<MeshCollider>();
+            if (meshCol != null)
+            {
+                meshCol.convex = useConvexCollider;
+                meshCol.enabled = true;
+            }
 
-            Rigidbody rb = trap.AddComponent<Rigidbody>();
-            rb.mass = trapMass;
-            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            Rigidbody rb = trap.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.mass = trapMass;
+                rb.interpolation = RigidbodyInterpolation.Interpolate;
+                rb.isKinematic = false;
+            }
 
             Trap trapScript = trap.GetComponent<Trap>();
             if (trapScript != null)
             {
                 trapScript.enabled = true;
 
-                // Make kinematic for timed traps during countdown
-                if (trapScript.trapType == TrapType.TimedDetonation)
-                {
+                if (trapScript.trapType == TrapType.TimedDetonation && rb != null)
                     rb.isKinematic = true;
-                }
 
                 trapScript.isPlayingVFX = true;
-                trapScript.ActivateTrap();
+                trapScript.ActivateTrap(); // Now fires RPC to all clients
             }
         }
 

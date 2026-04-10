@@ -33,10 +33,52 @@ namespace Hanzo.Networking
         private const string KILLS_KEY = "Kills";
         private const string DEATHS_KEY = "Deaths";
 
+        // In NetworkedScoreManager
+public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>(aiNames);
+
         // Add to local cache
         private Dictionary<int, int> playerDeaths = new Dictionary<int, int>();
         private Dictionary<int, int> playerScores = new Dictionary<int, int>();
         private Dictionary<int, int> playerHitsTaken = new Dictionary<int, int>();
+
+        // AI score tracking — keyed by negative IDs (-1, -2, -3...)
+        private Dictionary<int, string> aiNames = new Dictionary<int, string>();
+        private Dictionary<int, int> aiScores = new Dictionary<int, int>();
+        private Dictionary<int, int> aiKills = new Dictionary<int, int>();
+        private Dictionary<int, int> aiDeaths = new Dictionary<int, int>();
+
+        /// <summary>
+        /// Called by AIFillTimer after AIs spawn. Registers them so they
+        /// appear on the scoreboard alongside real players.
+        /// </summary>
+        public void RegisterAIPlayers(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int aiId = -(i + 1); // -1, -2, -3...
+                aiNames[aiId] = $"AI Player {i + 1}";
+                aiScores[aiId] = 0;
+                aiKills[aiId] = 0;
+                aiDeaths[aiId] = 0;
+                Debug.Log($"[ScoreManager] Registered {aiNames[aiId]} (ID: {aiId})");
+            }
+        }
+
+        // Extend GetAllPlayerScores to include AIs
+        public Dictionary<string, int> GetAllPlayerScores()
+        {
+            Dictionary<string, int> scores = new Dictionary<string, int>();
+
+            if (PhotonNetwork.CurrentRoom != null)
+                foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
+                    scores[player.NickName] = GetPlayerScore(player.ActorNumber);
+
+            // Include AI entries
+            foreach (var kvp in aiNames)
+                scores[kvp.Value] = aiScores[kvp.Key];
+
+            return scores;
+        }
 
         private void Awake()
         {
@@ -139,6 +181,55 @@ namespace Hanzo.Networking
         }
 
         /// <summary>
+        /// Awards a kill and score to an AI attacker by its negative ID.
+        /// Called from PlayerHealthComponent when the damage source is an AI.
+        /// </summary>
+        public void AddAIDashHitScore(int aiId)
+        {
+            if (!aiNames.ContainsKey(aiId))
+                return;
+
+            aiScores[aiId] += scoreForDashHit;
+            aiKills[aiId] += 1;
+
+            Debug.Log(
+                $"[ScoreManager] AI {aiNames[aiId]} scored {scoreForDashHit} pts "
+                    + $"(Kill) | Total: {aiScores[aiId]}"
+            );
+        }
+
+        /// <summary>
+        /// Returns the negative AI ID for a given GameObject, or 0 if not an AI.
+        /// </summary>
+        public int GetAIId(GameObject obj)
+        {
+            foreach (var kvp in aiNames)
+            {
+                // Match by name since AI GameObjects are named "AI Player 1", "AI Player 2" etc.
+                if (obj.name.Contains(kvp.Value) || obj.transform.root.name.Contains(kvp.Value))
+                    return kvp.Key;
+            }
+            return 0; // 0 means not a registered AI
+        }
+
+        public int GetAIScore(int aiId) => aiScores.TryGetValue(aiId, out int s) ? s : 0;
+
+        public int GetAIKills(int aiId) => aiKills.TryGetValue(aiId, out int k) ? k : 0;
+
+        public int GetAIDeaths(int aiId) => aiDeaths.TryGetValue(aiId, out int d) ? d : 0;
+
+        /// <summary>
+        /// Increments death count for an AI when it gets eliminated.
+        /// </summary>
+        public void IncrementAIDeaths(int aiId)
+        {
+            if (!aiNames.ContainsKey(aiId))
+                return;
+            aiDeaths[aiId] += 1;
+            Debug.Log($"[ScoreManager] AI {aiNames[aiId]} death count: {aiDeaths[aiId]}");
+        }
+
+        /// <summary>
         /// NEW: Award survival bonus to all alive players when someone dies
         /// </summary>
         public void AwardSurvivalBonus(int deadPlayerActorNumber)
@@ -155,7 +246,7 @@ namespace Hanzo.Networking
                 if (player.ActorNumber != deadPlayerActorNumber)
                 {
                     int playerHits = GetPlayerHitsTaken(player.ActorNumber);
-                    
+
                     // If they haven't taken 8 hits, they're still alive
                     if (playerHits < 8)
                     {
@@ -205,7 +296,7 @@ namespace Hanzo.Networking
             player.SetCustomProperties(props);
 
             Debug.Log($"[ScoreManager] 💀 {player.NickName} has died {newDeaths} times");
-            
+
             // NEW: Award survival bonus to other players
             if (PhotonNetwork.IsMasterClient)
             {
@@ -323,24 +414,6 @@ namespace Hanzo.Networking
         }
 
         /// <summary>
-        /// Get all player scores for leaderboard display
-        /// </summary>
-        public Dictionary<string, int> GetAllPlayerScores()
-        {
-            Dictionary<string, int> scores = new Dictionary<string, int>();
-
-            if (PhotonNetwork.CurrentRoom == null)
-                return scores;
-
-            foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
-            {
-                scores[player.NickName] = GetPlayerScore(player.ActorNumber);
-            }
-
-            return scores;
-        }
-
-        /// <summary>
         /// Called when player properties are updated
         /// </summary>
         public override void OnPlayerPropertiesUpdate(
@@ -394,8 +467,9 @@ namespace Hanzo.Networking
         /// </summary>
         public void PrintAllScores()
         {
-            if (PhotonNetwork.CurrentRoom == null) return;
-            
+            if (PhotonNetwork.CurrentRoom == null)
+                return;
+
             Debug.Log("========== CURRENT SCORES ==========");
             foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
             {
@@ -403,19 +477,22 @@ namespace Hanzo.Networking
                 int hits = GetPlayerHitsTaken(player.ActorNumber);
                 int kills = GetPlayerKills(player.ActorNumber);
                 int deaths = GetPlayerDeaths(player.ActorNumber);
-                
-                Debug.Log($"{player.NickName}: Score={score} | Hits={hits}/8 | Kills={kills} | Deaths={deaths}");
+
+                Debug.Log(
+                    $"{player.NickName}: Score={score} | Hits={hits}/8 | Kills={kills} | Deaths={deaths}"
+                );
             }
             Debug.Log("====================================");
         }
 
         private void OnGUI()
         {
-            if (!showDebugInfo) return;
-            
+            if (!showDebugInfo)
+                return;
+
             GUILayout.BeginArea(new Rect(Screen.width - 320, 10, 300, 500));
             GUILayout.Box("=== GLOBAL SCOREBOARD ===");
-            
+
             if (PhotonNetwork.CurrentRoom != null)
             {
                 foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
@@ -424,7 +501,7 @@ namespace Hanzo.Networking
                     int hits = GetPlayerHitsTaken(player.ActorNumber);
                     int kills = GetPlayerKills(player.ActorNumber);
                     int deaths = GetPlayerDeaths(player.ActorNumber);
-                    
+
                     GUILayout.Label($"{player.NickName}:");
                     GUILayout.Label($"  Score: {score}");
                     GUILayout.Label($"  Hits: {hits}/8");
@@ -437,7 +514,7 @@ namespace Hanzo.Networking
             {
                 GUILayout.Label("Not connected to room");
             }
-            
+
             GUILayout.EndArea();
         }
     }

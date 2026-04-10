@@ -549,27 +549,50 @@ namespace Hanzo.Player.Core
             }
 
             // ── Score awarding — only give kill credit to the FIRST attacker ────
+            // ── Score awarding — only give kill credit to the FIRST attacker ────
             if (!isSimultaneous && !isOfflineMode && damageSource != null && scoreManager != null)
             {
                 PhotonView sourceView = damageSource.GetComponent<PhotonView>();
-                if (
+
+                // Check if attacker is a registered AI first
+                int aiId = scoreManager.GetAIId(damageSource);
+                bool attackerIsAI = aiId != 0;
+
+                if (attackerIsAI)
+                {
+                    // AI attacker — route score through AI tracking
+                    if (damageType == DamageType.Dash)
+                    {
+                        scoreManager.AddAIDashHitScore(aiId);
+                        Debug.Log($"[PlayerHealth] 🤖 AI Kill Score → {damageSource.name}");
+                    }
+                    // else if (damageType == DamageType.Explosion)
+                    // {
+                    //     // Explosion penalty still applies to the victim
+                    //     int actorNum = GetActorNumber();
+                    //     if (actorNum >= 0)
+                    //         scoreManager.RemoveExplosionScore(actorNum);
+                    // }
+                }
+                else if (
                     sourceView != null
                     && sourceView.Owner != null
                     && photonView.Owner != null
                     && sourceView.Owner != photonView.Owner
                 )
                 {
+                    // Human attacker — existing Photon-based scoring
                     if (damageType == DamageType.Dash)
                     {
                         scoreManager.AddDashHitScore(sourceView.Owner.ActorNumber);
                         Debug.Log($"[PlayerHealth] 🎯 Score → {sourceView.Owner.NickName}");
                     }
-                    else if (damageType == DamageType.Explosion)
-                    {
-                        int actorNum = GetActorNumber();
-                        if (actorNum >= 0)
-                            scoreManager.RemoveExplosionScore(actorNum);
-                    }
+                    // else if (damageType == DamageType.Explosion)
+                    // {
+                    //     int actorNum = GetActorNumber();
+                    //     if (actorNum >= 0)
+                    //         scoreManager.RemoveExplosionScore(actorNum);
+                    // }
                 }
             }
 

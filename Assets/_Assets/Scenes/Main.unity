@@ -5580,9 +5580,11 @@ MonoBehaviour:
   playButton: {fileID: 232329301}
   countdownText: {fileID: 2139226796}
   statusText: {fileID: 0}
-  requiredPlayers: 2
-  maxMatchmakingTime: 300
+  requiredPlayers: 13
+  aiSpawnTimeout: 5
   gameSceneName: Game
+  numberOfAIsToSpawn: 13
+  aiPrefabName: AIPlayer
   gameVersion: 1.0
 --- !u!4 &736503395
 Transform:

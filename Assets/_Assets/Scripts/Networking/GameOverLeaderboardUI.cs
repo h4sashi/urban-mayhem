@@ -110,27 +110,51 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
         List<PlayerLeaderboardEntry> entries = new List<PlayerLeaderboardEntry>();
 
         if (!PhotonNetwork.InRoom)
-        {
-            Debug.LogWarning("[GameOverUI] Not in a room!");
             return entries;
-        }
 
+        // Real players
         foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
         {
-            int score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber);
-            int kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber);
-            int deaths = NetworkedScoreManager.Instance.GetPlayerDeaths(player.ActorNumber);
-            int hits = NetworkedScoreManager.Instance.GetPlayerHitsTaken(player.ActorNumber);
-
             entries.Add(
                 new PlayerLeaderboardEntry
                 {
                     ActorNumber = player.ActorNumber,
                     Username = player.NickName,
-                    Score = score,
-                    Kills = kills,
-                    Deaths = deaths,
-                    Hits = hits,
+                    Score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber),
+                    Kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber),
+                    Deaths = NetworkedScoreManager.Instance.GetPlayerDeaths(player.ActorNumber),
+                    Hits = NetworkedScoreManager.Instance.GetPlayerHitsTaken(player.ActorNumber),
+                }
+            );
+        }
+
+        // // AI players — after the real player loop
+        // foreach (var kvp in aiNames_local)
+        // {
+        //     entries.Add(
+        //         new PlayerLeaderboardEntry
+        //         {
+        //             ActorNumber = kvp.Key, // negative ID
+        //             Username = kvp.Value,
+        //             Score = NetworkedScoreManager.Instance.GetAIScore(kvp.Key),
+        //             Kills = NetworkedScoreManager.Instance.GetAIKills(kvp.Key),
+        //             Deaths = NetworkedScoreManager.Instance.GetAIDeaths(kvp.Key),
+        //         }
+        //     );
+        // }
+
+        // AI players
+        var aiPlayers = NetworkedScoreManager.Instance.GetAIPlayerNames();
+        foreach (var kvp in aiPlayers)
+        {
+            entries.Add(
+                new PlayerLeaderboardEntry
+                {
+                    ActorNumber = kvp.Key,
+                    Username = kvp.Value + " [AI]",
+                    Score = NetworkedScoreManager.Instance.GetAIScore(kvp.Key),
+                    Kills = NetworkedScoreManager.Instance.GetAIKills(kvp.Key),
+                    Deaths = NetworkedScoreManager.Instance.GetAIDeaths(kvp.Key),
                 }
             );
         }
