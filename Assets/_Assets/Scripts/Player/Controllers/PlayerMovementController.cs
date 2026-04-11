@@ -178,23 +178,23 @@ namespace Hanzo.Player.Controllers
             // ENTER FALLING: Controller says we're falling and we're not in FallingState
             if (stateController.IsFalling && !(currentState is FallingState))
             {
-                Debug.Log("[Movement] Entering FallingState");
+                // Debug.Log("[Movement] Entering FallingState");
                 ChangeState(fallingState);
             }
             // EXIT FALLING: Controller says we're grounded and we're in FallingState
             else if (stateController.IsGrounded && !stateController.IsFalling && currentState is FallingState)
             {
-                Debug.Log("[Movement] Landing detected - exiting FallingState");
+                // Debug.Log("[Movement] Landing detected - exiting FallingState");
                 
                 // SIMPLE: Just check current input to determine next state
                 if (rawInput.magnitude > 0.1f)
                 {
-                    Debug.Log("[Movement] Has input - transitioning to Moving");
+                    // Debug.Log("[Movement] Has input - transitioning to Moving");
                     ChangeState(movingState);
                 }
                 else
                 {
-                    Debug.Log("[Movement] No input - transitioning to Idle");
+                    // Debug.Log("[Movement] No input - transitioning to Idle");
                     ChangeState(idleState);
                 }
             }
@@ -267,7 +267,7 @@ namespace Hanzo.Player.Controllers
                 virtualCamera.LookAt = transform;
             }
 
-            Debug.Log($"Virtual Camera setup complete for local player: {photonView.ViewID}");
+            // Debug.Log($"Virtual Camera setup complete for local player: {photonView.ViewID}");
         }
 
         private void InitializeStates()
@@ -382,7 +382,7 @@ namespace Hanzo.Player.Controllers
 
             if (dashAbility != null && dashAbility.TryActivate())
             {
-                Debug.Log("Dash activated!");
+                // Debug.Log("Dash activated!");
             }
         }
 
@@ -395,7 +395,7 @@ namespace Hanzo.Player.Controllers
 
             if (speedBoostAbility != null && speedBoostAbility.TryActivate())
             {
-                Debug.Log($"Speed Boost activated! Stack Level: {speedBoostAbility.StackLevel}");
+                // Debug.Log($"Speed Boost activated! Stack Level: {speedBoostAbility.StackLevel}");
             }
         }
 
@@ -404,7 +404,7 @@ namespace Hanzo.Player.Controllers
             if (movingState != null)
             {
                 movingState.SetSpeedMultiplier(multiplier);
-                Debug.Log($"Movement speed multiplier updated to: {multiplier}x");
+                // Debug.Log($"Movement speed multiplier updated to: {multiplier}x");
             }
         }
 

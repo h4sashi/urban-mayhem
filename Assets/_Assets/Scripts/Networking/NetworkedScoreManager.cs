@@ -48,6 +48,7 @@ namespace Hanzo.Networking
         private Dictionary<int, int> aiScores = new Dictionary<int, int>();
         private Dictionary<int, int> aiKills = new Dictionary<int, int>();
         private Dictionary<int, int> aiDeaths = new Dictionary<int, int>();
+        private Dictionary<int, int> aiHitsTaken = new Dictionary<int, int>();
 
         // Add this alongside the existing playerScores/playerDeaths dictionaries
         private Dictionary<int, int> playerKills = new Dictionary<int, int>();
@@ -65,6 +66,7 @@ namespace Hanzo.Networking
                 aiScores[aiId] = 0;
                 aiKills[aiId] = 0;
                 aiDeaths[aiId] = 0;
+                aiHitsTaken[aiId] = 0;
             }
         }
 
@@ -79,7 +81,7 @@ namespace Hanzo.Networking
 
             // Include AI entries
             foreach (var kvp in aiNames)
-                scores[kvp.Value] = aiScores[kvp.Key];
+                scores[kvp.Value] = GetAIHitsTaken(kvp.Key);
 
             return scores;
         }
@@ -212,12 +214,10 @@ namespace Hanzo.Networking
             if (!aiNames.ContainsKey(aiId))
                 return;
 
-            aiScores[aiId] += scoreForDashHit;
-            aiKills[aiId] += 1;
-
+            // AI kill/score tracking is disabled for final leaderboard processing.
             Debug.Log(
-                $"[ScoreManager] AI {aiNames[aiId]} scored {scoreForDashHit} pts "
-                    + $"(Kill) | Total: {aiScores[aiId]}"
+                $"[ScoreManager] AI hit score tracking disabled for {aiNames[aiId]}. "
+                    + "AI final leaderboards use hits taken only."
             );
         }
 
@@ -242,6 +242,8 @@ namespace Hanzo.Networking
 
         public int GetAIScore(int aiId) => aiScores.TryGetValue(aiId, out int s) ? s : 0;
 
+        public int GetAIHitsTaken(int aiId) => aiHitsTaken.TryGetValue(aiId, out int hits) ? hits : 0;
+
         public int GetAIKills(int aiId) => aiKills.TryGetValue(aiId, out int k) ? k : 0;
 
         public int GetAIDeaths(int aiId) => aiDeaths.TryGetValue(aiId, out int d) ? d : 0;
@@ -258,52 +260,22 @@ namespace Hanzo.Networking
         }
 
         /// <summary>
+        /// Increments hit count for an AI when it takes damage.
+        /// </summary>
+        public void IncrementAIHits(int aiId)
+        {
+            if (!aiNames.ContainsKey(aiId))
+                return;
+            aiHitsTaken[aiId] += 1;
+            Debug.Log($"[ScoreManager] AI {aiNames[aiId]} hits taken: {aiHitsTaken[aiId]}");
+        }
+
+        /// <summary>
         /// NEW: Award survival bonus to all alive players when someone dies
         /// </summary>
         public void AwardSurvivalBonus(int deadPlayerActorNumber)
         {
-            if (PhotonNetwork.CurrentRoom == null)
-                return;
-
-            int alivePlayerCount = 0;
-            List<PhotonPlayer> alivePlayers = new List<PhotonPlayer>();
-
-            // Find all alive players (excluding the one who just died)
-            foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
-            {
-                if (player.ActorNumber != deadPlayerActorNumber)
-                {
-                    int playerHits = GetPlayerHitsTaken(player.ActorNumber);
-
-                    // If they haven't taken 8 hits, they're still alive
-                    if (playerHits < 8)
-                    {
-                        alivePlayerCount++;
-                        alivePlayers.Add(player);
-                    }
-                }
-            }
-
-            // Award bonus to each alive player
-            foreach (var alivePlayer in alivePlayers)
-            {
-                int currentScore = GetPlayerScore(alivePlayer.ActorNumber);
-                int newScore = currentScore + survivalBonusPerDeath;
-
-                Hashtable props = new Hashtable { { SCORE_KEY, newScore } };
-                alivePlayer.SetCustomProperties(props);
-
-                Debug.Log(
-                    $"[ScoreManager] 🎖️ {alivePlayer.NickName} received survival bonus +{survivalBonusPerDeath}! (Total: {newScore})"
-                );
-            }
-
-            if (alivePlayerCount > 0)
-            {
-                Debug.Log(
-                    $"[ScoreManager] 💀 Player eliminated! {alivePlayerCount} survivors received +{survivalBonusPerDeath} bonus points"
-                );
-            }
+            // Survival bonus disabled: not used in current scoring rules.
         }
 
         public void IncrementPlayerDeaths(int actorNumber)
@@ -325,11 +297,11 @@ namespace Hanzo.Networking
 
             Debug.Log($"[ScoreManager] 💀 {player.NickName} has died {newDeaths} times");
 
-            // NEW: Award survival bonus to other players
-            if (PhotonNetwork.IsMasterClient)
-            {
-                AwardSurvivalBonus(actorNumber);
-            }
+            // Survival bonus disabled: no extra points awarded on death.
+            // if (PhotonNetwork.IsMasterClient)
+            // {
+            //     AwardSurvivalBonus(actorNumber);
+            // }
         }
 
         /// <summary>

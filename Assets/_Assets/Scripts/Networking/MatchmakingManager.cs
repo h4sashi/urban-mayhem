@@ -254,7 +254,7 @@ void StartGameWithAIs()
         UpdateStatus($"Disconnected: {cause}");
 
         if (playButton != null)
-            playButton.interactable = false;
+            playButton.interactable = true;
 
         isMatchmaking = false;
         if (countdownCoroutine != null)

@@ -535,17 +535,40 @@ namespace Hanzo.Player.Core
                 else if (scoreManager != null)
                 {
                     int actorNum = GetActorNumber();
-                    if (actorNum >= 0)
+                    int aiId = scoreManager.GetAIId(gameObject);
+                    if (aiId != 0)
+                    {
+                        // AI victim
+                        scoreManager.IncrementAIHits(aiId);
+                        hitsTaken = scoreManager.GetAIHitsTaken(aiId);
+                    }
+                    else if (actorNum >= 0)
+                    {
+                        // Human victim
                         hitsTaken = scoreManager.IncrementPlayerHits(actorNum);
+                    }
                 }
             }
             else
             {
-                hitsTaken = isOfflineMode
-                    ? offlineHitsTaken
-                    : (
-                        scoreManager != null ? scoreManager.GetPlayerHitsTaken(GetActorNumber()) : 0
-                    );
+                if (isOfflineMode)
+                {
+                    hitsTaken = offlineHitsTaken;
+                }
+                else if (scoreManager != null)
+                {
+                    int actorNum = GetActorNumber();
+                    int aiId = scoreManager.GetAIId(gameObject);
+                    if (aiId != 0)
+                    {
+                        // AI victim
+                        hitsTaken = scoreManager.GetAIHitsTaken(aiId);
+                    }
+                    else
+                    {
+                        hitsTaken = scoreManager.GetPlayerHitsTaken(actorNum);
+                    }
+                }
             }
 
             // ── Score awarding — only give kill credit to the FIRST attacker ────
@@ -826,12 +849,12 @@ namespace Hanzo.Player.Core
             // Reset hit counter
             if (isOfflineMode)
                 offlineHitsTaken = 0;
-            else if (scoreManager != null)
-            {
-                int actorNum = GetActorNumber();
-                if (actorNum >= 0)
-                    scoreManager.ResetPlayerHits(actorNum);
-            }
+            // else if (scoreManager != null)
+            // {
+            //     int actorNum = GetActorNumber();
+            //     if (actorNum >= 0)
+            //         scoreManager.ResetPlayerHits(actorNum);
+            // }
 
             transform.position = respawnPosition;
 

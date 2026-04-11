@@ -535,7 +535,7 @@ namespace Hanzo.Player.Controllers
             if (stunSFX != null && audioSource != null)
             {
                 audioSource.PlayOneShot(stunSFX, stunSFXVolume);
-                Debug.Log($"[{name}] 🔊 Playing stun SFX (Local)");
+                // Debug.Log($"[{name}] 🔊 Playing stun SFX (Local)");
             }
 
             // Sync sound to other players
@@ -575,7 +575,7 @@ namespace Hanzo.Player.Controllers
             if (stunSFX != null && audioSource != null)
             {
                 audioSource.PlayOneShot(stunSFX, stunSFXVolume);
-                Debug.Log($"[{name}] 🔊 Playing stun SFX (Remote)");
+                // Debug.Log($"[{name}] 🔊 Playing stun SFX (Remote)");
             }
         }
 

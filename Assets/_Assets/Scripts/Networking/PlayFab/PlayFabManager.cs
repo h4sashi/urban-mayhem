@@ -264,6 +264,8 @@ namespace Hanzo.Networking.PlayFab
         {
             Debug.LogError("Login failed: " + error.GenerateErrorReport());
             UpdateStatus("Login failed: " + error.ErrorMessage);
+            if(useDefaultLogin == true)
+                DefaultLogin();
         }
 
         private void OnRegisterFailure(PlayFabError error)

@@ -119,7 +119,7 @@ namespace Hanzo.Player.Controllers
             }
             else
             {
-                Debug.Log($"[{name}] ✅ DashCollisionHandler initialized successfully");
+                // Debug.Log($"[{name}] ✅ DashCollisionHandler initialized successfully");
             }
 
             DiagnoseLayerConfiguration();
@@ -161,14 +161,14 @@ namespace Hanzo.Player.Controllers
                     if (dashSFX != null && audioSource != null)
                     {
                         audioSource.PlayOneShot(dashSFX, 0.45f);
-                        Debug.Log($"[{name}] 🔊 Playing dash SFX");
+                        // Debug.Log($"[{name}] 🔊 Playing dash SFX");
                     }
                     hasPlayedDashSound = true;
                 }
 
                 if (verboseLogging && framesSinceDashActive % 5 == 0)
                 {
-                    Debug.Log($"[{name}] 🏃 Dash Active (Frame {framesSinceDashActive})");
+                    // Debug.Log($"[{name}] 🏃 Dash Active (Frame {framesSinceDashActive})");
                 }
 
                 CheckForPlayerCollisions();
@@ -180,7 +180,7 @@ namespace Hanzo.Player.Controllers
                 {
                     if (verboseLogging)
                     {
-                        Debug.Log($"[{name}] ⏹️ Dash ended after {framesSinceDashActive} frames");
+                        // Debug.Log($"[{name}] ⏹️ Dash ended after {framesSinceDashActive} frames");
                     }
                     framesSinceDashActive = 0;
                     hasPlayedDashSound = false; // Reset for next dash
@@ -207,15 +207,15 @@ namespace Hanzo.Player.Controllers
             {
                 if (hitColliders.Length > 0)
                 {
-                    Debug.Log(
-                        $"[{name}] 🎯 Player collision check: Found {hitColliders.Length} colliders"
-                    );
+                    // Debug.Log(
+                        // $"[{name}] 🎯 Player collision check: Found {hitColliders.Length} colliders"
+                    // );
                 }
                 else if (framesSinceDashActive % 10 == 0)
                 {
-                    Debug.Log(
-                        $"[{name}] 🔍 Player collision check: No colliders found at {detectionPos}"
-                    );
+                    // Debug.Log(
+                        // $"[{name}] 🔍 Player collision check: No colliders found at {detectionPos}"
+                    // );
                 }
             }
 
@@ -514,7 +514,7 @@ namespace Hanzo.Player.Controllers
             if (stateController != null)
             {
                 stateController.ApplyKnockbackAndStun(direction, force, stunTime);
-                Debug.Log($"[{name}] [Victim] Received knockback from ViewID {attackerViewID}");
+                // Debug.Log($"[{name}] [Victim] Received knockback from ViewID {attackerViewID}");
             }
         }
 
@@ -526,9 +526,9 @@ namespace Hanzo.Player.Controllers
             {
                 targetRb.velocity = Vector3.zero;
                 targetRb.AddForce(forceDirection * forceMagnitude, ForceMode.Impulse);
-                Debug.Log(
-                    $"[{name}] [Remote] Destructible received knockback force: {forceMagnitude}"
-                );
+                // Debug.Log(
+                    // $"[{name}] [Remote] Destructible received knockback force: {forceMagnitude}"
+                // );
             }
         }
 
@@ -543,7 +543,7 @@ namespace Hanzo.Player.Controllers
             {
                 GameObject vfx = Instantiate(vfxPrefab, position, Quaternion.identity);
                 Destroy(vfx, 2f);
-                Debug.Log($"[{vfx.name}] ✨ Spawned hit VFX at {position}");
+                // Debug.Log($"[{vfx.name}] ✨ Spawned hit VFX at {position}");
             }
         }
 

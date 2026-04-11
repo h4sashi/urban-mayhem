@@ -96,14 +96,14 @@ namespace Hanzo.Player.Controllers
         [PunRPC]
         private void RPC_PlayDashVisuals()
         {
-            Debug.Log($"[REMOTE] RPC_PlayDashVisuals called on {gameObject.name}");
+            // Debug.Log($"[REMOTE] RPC_PlayDashVisuals called on {gameObject.name}");
             
             // Play trail
             if (dashTrail != null)
             {
                 dashTrail.emitting = true;
                 dashTrail.Clear();
-                Debug.Log("[REMOTE] Trail started");
+                // Debug.Log("[REMOTE] Trail started");
             }
             else
             {
@@ -114,7 +114,7 @@ namespace Hanzo.Player.Controllers
             if (dashVFX != null)
             {
                 dashVFX.Play();
-                Debug.Log("[REMOTE] VFX played");
+                // Debug.Log("[REMOTE] VFX played");
             }
             else
             {
@@ -125,7 +125,7 @@ namespace Hanzo.Player.Controllers
             if (animator != null)
             {
                 animator.SetBool("DASH", true);
-                Debug.Log("[REMOTE] Animation set to DASH");
+                // Debug.Log("[REMOTE] Animation set to DASH");
             }
             else
             {
@@ -139,7 +139,7 @@ namespace Hanzo.Player.Controllers
         [PunRPC]
         private void RPC_StopDashVisuals()
         {
-            Debug.Log($"[REMOTE] RPC_StopDashVisuals called on {gameObject.name}");
+            // Debug.Log($"[REMOTE] RPC_StopDashVisuals called on {gameObject.name}");
             
             // Stop trail
             if (dashTrail != null)

@@ -18,15 +18,15 @@ namespace Hanzo.Networking
         public static PlayFabLeaderboardManager Instance { get; private set; }
 
         [Header("Leaderboard Settings")]
-        [SerializeField]
-        private string killsLeaderboardId = "Kills";
+        // [SerializeField]
+        // private string killsLeaderboardId = "Kills";
 
-        [SerializeField]
-        private string scoreLeaderboardId = "Score";
-        [SerializeField] private string hitsLeaderboardId = "TotalHitsTaken"; // ← ADD THIS
+        // [SerializeField]
+        // private string scoreLeaderboardId = "Score";
+        [SerializeField] private string hitsLeaderboardId = "TotalHitsTaken";
 
-        [SerializeField]
-        private string survivorLeaderboardId = "SurvivalTime";
+        // [SerializeField]
+        // private string survivorLeaderboardId = "SurvivalTime";
 
         [SerializeField]
         private bool debugSubmissions = true;
@@ -43,14 +43,16 @@ namespace Hanzo.Networking
             DontDestroyOnLoad(gameObject);
         }
 
-        void OnEnable()
+        public override void OnEnable()
         {
+            base.OnEnable();
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
-        void OnDisable()
+        public override void OnDisable()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            base.OnDisable();
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -107,8 +109,8 @@ namespace Hanzo.Networking
                     ActorNumber = player.ActorNumber,
 
                     // Get stats from NetworkedScoreManager
-                    Score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber),
-                    Kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber),
+                    // Score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber),
+                    // Kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber),
                     Deaths = NetworkedScoreManager.Instance.GetPlayerDeaths(player.ActorNumber),
                     HitsTaken = NetworkedScoreManager.Instance.GetPlayerHitsTaken(
                         player.ActorNumber
@@ -126,7 +128,7 @@ namespace Hanzo.Networking
                 {
                     Debug.Log(
                         $"[Leaderboard] Calculated stats for {playerStats.DisplayName}: "
-                            + $"Score={playerStats.Score}, Kills={playerStats.Kills}, Deaths={playerStats.Deaths}"
+                            + $"HitsTaken={playerStats.HitsTaken}, Deaths={playerStats.Deaths}"
                     );
                 }
             }
@@ -139,10 +141,12 @@ namespace Hanzo.Networking
         /// </summary>
         private void SubmitPlayerStats(PlayerGameStats stats)
         {
-            SubmitToLeaderboard(stats.Score, scoreLeaderboardId, stats.DisplayName);
-            SubmitToLeaderboard(stats.Kills, killsLeaderboardId, stats.DisplayName);
-            SubmitToLeaderboard((int)stats.SurvivalScore, survivorLeaderboardId, stats.DisplayName);
-            SubmitToLeaderboard(stats.HitsTaken, hitsLeaderboardId, stats.DisplayName); // ← ADD THIS
+            Debug.Log($"[Leaderboard] Submitting stats for {stats.DisplayName}: HitsTaken={stats.HitsTaken}");
+
+            // SubmitToLeaderboard(stats.Score, scoreLeaderboardId, stats.DisplayName);
+            // SubmitToLeaderboard(stats.Kills, killsLeaderboardId, stats.DisplayName);
+            // SubmitToLeaderboard((int)stats.SurvivalScore, survivorLeaderboardId, stats.DisplayName);
+            SubmitToLeaderboard(stats.HitsTaken, hitsLeaderboardId, stats.DisplayName);
 
             UpdatePlayerStatistics(stats);
         }
@@ -188,14 +192,14 @@ namespace Hanzo.Networking
             var statistics = new List<StatisticUpdate>
             {
                 new StatisticUpdate { StatisticName = "TotalGamesPlayed", Value = 1 }, // Increment
-                new StatisticUpdate { StatisticName = "TotalKills", Value = stats.Kills },
+                // new StatisticUpdate { StatisticName = "TotalKills", Value = stats.Kills },
                 new StatisticUpdate { StatisticName = "TotalDeaths", Value = stats.Deaths },
-                new StatisticUpdate { StatisticName = "TotalScore", Value = stats.Score },
-                new StatisticUpdate
-                {
-                    StatisticName = "AverageKDRatio",
-                    Value = (int)(stats.KillDeathRatio * 100),
-                }, // Store as int (multiply by 100)
+                // new StatisticUpdate { StatisticName = "TotalScore", Value = stats.Score },
+                // new StatisticUpdate
+                // {
+                //     StatisticName = "AverageKDRatio",
+                //     Value = (int)(stats.KillDeathRatio * 100),
+                // }, // Store as int (multiply by 100)
                 new StatisticUpdate { StatisticName = "TotalHitsTaken", Value = stats.HitsTaken },
             };
 

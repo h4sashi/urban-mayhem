@@ -120,8 +120,8 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
                 {
                     ActorNumber = player.ActorNumber,
                     Username = player.NickName,
-                    Score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber),
-                    Kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber),
+                    Score = NetworkedScoreManager.Instance.GetPlayerHitsTaken(player.ActorNumber),
+                    Kills = 0,
                     Deaths = NetworkedScoreManager.Instance.GetPlayerDeaths(player.ActorNumber),
                     Hits = NetworkedScoreManager.Instance.GetPlayerHitsTaken(player.ActorNumber),
                 }
@@ -152,9 +152,10 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
                 {
                     ActorNumber = kvp.Key,
                     Username = kvp.Value + " [AI]",
-                    Score = NetworkedScoreManager.Instance.GetAIScore(kvp.Key),
-                    Kills = NetworkedScoreManager.Instance.GetAIKills(kvp.Key),
+                    Score = NetworkedScoreManager.Instance.GetAIHitsTaken(kvp.Key),
+                    Kills = 0,
                     Deaths = NetworkedScoreManager.Instance.GetAIDeaths(kvp.Key),
+                    Hits = NetworkedScoreManager.Instance.GetAIHitsTaken(kvp.Key),
                 }
             );
         }
