@@ -1,6 +1,5 @@
 using Photon.Pun;
 using UnityEngine;
-using UnityEngine.AI;
 
 namespace Hanzo.Networking.Utils
 {
@@ -9,14 +8,14 @@ namespace Hanzo.Networking.Utils
         [Header("Prefab (must be in Resources/)")]
         public GameObject[] playerPrefab; // put prefab in Assets/Resources/
 
+        [Header("Spawn Positions")]
+        public GameObject[] spawnPoints; // explicit spawn positions in the scene
+
         [Header("Spawn area")]
-        public float spawnRadius = 20f; // radius around this GameObject to search for spawn positions
+        public float spawnRadius = 20f; // radius around this GameObject to search for fallback spawn positions
         public LayerMask obstacleMask; // layers considered as obstacles (players, props) when checking overlap
         public float clearRadius = 2.0f; // how much empty space is required around spawn point
         public int maxAttempts = 30; // how many random tries before fallback
-
-        [Header("NavMesh")]
-        public float navSampleDistance = 2f; // how far to search to snap to navmesh
 
         [Header("Options")]
         public bool spawnOnJoinedRoom = true; // automatically spawn when joining room
@@ -195,32 +194,40 @@ namespace Hanzo.Networking.Utils
         }
 
         /// <summary>
-        /// Tries multiple times to find a NavMesh-snapable, unobstructed point within spawnRadius.
-        /// Uses Physics.OverlapSphere to ensure no nearby colliders in obstacleMask.
+        /// Tries to find an unobstructed spawn point using the assigned spawn position GameObjects.
+        /// Falls back to a random point inside spawnRadius if no spawn points are assigned.
         /// </summary>
         private bool FindValidSpawn(out Vector3 result)
         {
-            for (int i = 0; i < maxAttempts; i++)
+            if (spawnPoints != null && spawnPoints.Length > 0)
             {
-                Vector2 circle = Random.insideUnitCircle * spawnRadius;
-                Vector3 candidate = transform.position + new Vector3(circle.x, 0f, circle.y);
-
-                NavMeshHit navHit;
-                if (
-                    NavMesh.SamplePosition(
-                        candidate,
-                        out navHit,
-                        navSampleDistance,
-                        NavMesh.AllAreas
-                    )
-                )
+                for (int i = 0; i < maxAttempts; i++)
                 {
-                    Vector3 navPoint = navHit.position + Vector3.up * 0.5f; // Add small offset
+                    GameObject spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
+                    if (spawnPoint == null || !spawnPoint.activeInHierarchy)
+                    {
+                        continue;
+                    }
 
-                    Collider[] hits = Physics.OverlapSphere(navPoint, clearRadius, obstacleMask);
+                    Vector3 candidate = spawnPoint.transform.position;
+                    Collider[] hits = Physics.OverlapSphere(candidate, clearRadius, obstacleMask);
                     if (hits.Length == 0)
                     {
-                        result = navPoint;
+                        result = candidate;
+                        return true;
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < maxAttempts; i++)
+                {
+                    Vector2 circle = Random.insideUnitCircle * spawnRadius;
+                    Vector3 candidate = transform.position + new Vector3(circle.x, 0f, circle.y);
+                    Collider[] hits = Physics.OverlapSphere(candidate, clearRadius, obstacleMask);
+                    if (hits.Length == 0)
+                    {
+                        result = candidate;
                         return true;
                     }
                 }

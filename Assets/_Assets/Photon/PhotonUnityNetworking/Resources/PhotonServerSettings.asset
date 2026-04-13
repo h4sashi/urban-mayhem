@@ -70,6 +70,7 @@ MonoBehaviour:
   - RPC_SyncCountdownStart
   - RPC_ActivateTrap
   - RPC_Detonate
+  - RPC_TakeDamage
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1
