@@ -5581,7 +5581,7 @@ MonoBehaviour:
   countdownText: {fileID: 2139226796}
   statusText: {fileID: 0}
   requiredPlayers: 13
-  aiSpawnTimeout: 5
+  aiSpawnTimeout: 35
   gameSceneName: Game
   numberOfAIsToSpawn: 13
   aiPrefabName: AIPlayer

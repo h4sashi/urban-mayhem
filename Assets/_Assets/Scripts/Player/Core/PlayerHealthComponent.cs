@@ -571,60 +571,7 @@ namespace Hanzo.Player.Core
                 }
             }
 
-            // ── Score awarding — only give kill credit to the FIRST attacker ────
-            // ── Score awarding — only give kill credit to the FIRST attacker ────
-            if (!isSimultaneous && !isOfflineMode && damageSource != null && scoreManager != null)
-            {
-                PhotonView sourceView = damageSource.GetComponent<PhotonView>();
-
-                // Check if attacker is a registered AI first
-                int aiId = scoreManager.GetAIId(damageSource);
-                bool attackerIsAI = aiId != 0;
-
-                if (attackerIsAI)
-                {
-                    // AI attacker — route score through AI tracking
-                    if (damageType == DamageType.Dash)
-                    {
-                        scoreManager.AddAIDashHitScore(aiId);
-                        Debug.Log($"[PlayerHealth] 🤖 AI Kill Score → {damageSource.name}");
-                    }
-                }
-                else if (
-                    sourceView != null
-                    && sourceView.Owner != null
-                    && photonView.Owner != null
-                    && sourceView.Owner != photonView.Owner
-                )
-                {
-                    // Human attacker — existing Photon-based scoring
-                    if (damageType == DamageType.Dash)
-                    {
-                        scoreManager.AddDashHitScore(sourceView.Owner.ActorNumber);
-                        Debug.Log($"[PlayerHealth] 🎯 Score → {sourceView.Owner.NickName}");
-                    }
-
-                    // else if (damageType == DamageType.Explosion)
-                    // {
-                    //     int actorNum = GetActorNumber();
-                    //     if (actorNum >= 0)
-                    //         scoreManager.RemoveExplosionScore(actorNum);
-                    // }
-                }
-            }
-
             OnDamageTaken?.Invoke(damageAmount, damageSource, damageType);
-
-            // ── Award hit-based score to victim (registers for leaderboard) ─────────
-            if (damageType == DamageType.Dash && !isOfflineMode && scoreManager != null)
-            {
-                int actorNum = GetActorNumber();
-                if (actorNum >= 0)
-                {
-                    scoreManager.AddHitReceivedScore(actorNum);
-                    Debug.Log($"[PlayerHealth] 📊 Hit-based score awarded to {GetPlayerName()}");
-                }
-            }
 
             if (!isOfflineMode && photonView != null)
             {
@@ -641,8 +588,38 @@ namespace Hanzo.Player.Core
 
             if (shouldDie)
             {
+                AwardKillCredit(damageSource, isSimultaneous);
                 Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} — triggering stun-death.");
                 DieWithKnockback(damageSource, damageType);
+            }
+        }
+
+        private void AwardKillCredit(GameObject damageSource, bool isSimultaneous)
+        {
+            if (isSimultaneous || isOfflineMode || damageSource == null || scoreManager == null)
+                return;
+
+            int aiId = scoreManager.GetAIId(damageSource);
+            if (aiId != 0)
+            {
+                if (aiId == scoreManager.GetAIId(gameObject))
+                    return;
+
+                scoreManager.AddAIKill(aiId);
+                Debug.Log($"[PlayerHealth] AI kill credit → {damageSource.name}");
+                return;
+            }
+
+            PhotonView sourceView = damageSource.GetComponent<PhotonView>();
+            if (
+                sourceView != null
+                && sourceView.Owner != null
+                && photonView != null
+                && sourceView.ViewID != photonView.ViewID
+            )
+            {
+                scoreManager.AddPlayerKill(sourceView.Owner.ActorNumber);
+                Debug.Log($"[PlayerHealth] Kill credit → {sourceView.Owner.NickName}");
             }
         }
 
@@ -680,9 +657,17 @@ namespace Hanzo.Player.Core
                 offlineDeaths++;
             else if (scoreManager != null)
             {
-                int actorNum = GetActorNumber();
-                if (actorNum >= 0)
-                    scoreManager.IncrementPlayerDeaths(actorNum);
+                int aiId = scoreManager.GetAIId(gameObject);
+                if (aiId != 0)
+                {
+                    scoreManager.IncrementAIDeaths(aiId);
+                }
+                else
+                {
+                    int actorNum = GetActorNumber();
+                    if (actorNum >= 0)
+                        scoreManager.IncrementPlayerDeaths(actorNum);
+                }
             }
 
             OnPlayerDied?.Invoke();
@@ -773,9 +758,17 @@ namespace Hanzo.Player.Core
             }
             else if (scoreManager != null)
             {
-                int actorNum = GetActorNumber();
-                if (actorNum >= 0)
-                    scoreManager.IncrementPlayerDeaths(actorNum);
+                int aiId = scoreManager.GetAIId(gameObject);
+                if (aiId != 0)
+                {
+                    scoreManager.IncrementAIDeaths(aiId);
+                }
+                else
+                {
+                    int actorNum = GetActorNumber();
+                    if (actorNum >= 0)
+                        scoreManager.IncrementPlayerDeaths(actorNum);
+                }
             }
 
             OnPlayerDied?.Invoke();

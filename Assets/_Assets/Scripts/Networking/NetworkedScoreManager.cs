@@ -19,9 +19,6 @@ namespace Hanzo.Networking
         private int scoreForDashHit = 10;
 
         [SerializeField]
-        private int scoreLostFromExplosion = 5;
-
-        [SerializeField]
         private int survivalBonusPerDeath = 5; // NEW: Bonus for each player death
 
         [SerializeField]
@@ -33,7 +30,9 @@ namespace Hanzo.Networking
         private const string KILLS_KEY = "Kills";
 
         private const string DEATHS_KEY = "Deaths";
-        
+        private const string AI_SCORE_KEY_PREFIX = "AIScore_";
+        private const string AI_KILLS_KEY_PREFIX = "AIKills_";
+        private const string AI_DEATHS_KEY_PREFIX = "AIDeaths_";
 
         // In NetworkedScoreManager
         public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>(aiNames);
@@ -62,15 +61,13 @@ namespace Hanzo.Networking
             for (int i = 0; i < count; i++)
             {
                 int aiId = -(i + 1);
-                aiNames[aiId] = $"AI_Player_{i + 1}"; // matches GameObject name
-                aiScores[aiId] = 0;
-                aiKills[aiId] = 0;
-                aiDeaths[aiId] = 0;
-                aiHitsTaken[aiId] = 0;
+                EnsureAIRegistered(aiId);
+                SyncAIStatsFromRoom(aiId);
+                PublishInitialAIStats(aiId);
             }
         }
 
-        // Extend GetAllPlayerScores to include AIs
+        // Returns real and AI hit scores for match result displays.
         public Dictionary<string, int> GetAllPlayerScores()
         {
             Dictionary<string, int> scores = new Dictionary<string, int>();
@@ -79,9 +76,8 @@ namespace Hanzo.Networking
                 foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
                     scores[player.NickName] = GetPlayerScore(player.ActorNumber);
 
-            // Include AI entries
-            foreach (var kvp in aiNames)
-                scores[kvp.Value] = GetAIHitsTaken(kvp.Key);
+            foreach (var aiPlayer in aiNames)
+                scores[aiPlayer.Value + " [AI]"] = GetAIScore(aiPlayer.Key);
 
             return scores;
         }
@@ -148,15 +144,15 @@ namespace Hanzo.Networking
         }
 
         /// <summary>
-        /// Add score to a player (called when they successfully hit someone with dash)
+        /// Add kill credit to a player.
         /// </summary>
-        public void AddDashHitScore(int actorNumber)
+        public void AddPlayerKill(int actorNumber)
         {
             PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
             if (player == null)
             {
                 Debug.LogWarning(
-                    $"[ScoreManager] AddDashHitScore: Player {actorNumber} not found!"
+                    $"[ScoreManager] AddPlayerKill: Player {actorNumber} not found!"
                 );
                 return;
             }
@@ -176,49 +172,139 @@ namespace Hanzo.Networking
             player.SetCustomProperties(props);
 
             Debug.Log(
-                $"[ScoreManager] 💥 {player.NickName} scored {scoreForDashHit} pts (Kill #{newKills}) | Total: {newScore}"
+                $"[ScoreManager] {player.NickName} gained kill #{newKills} | Score: {newScore}"
             );
         }
 
         /// <summary>
-        /// Remove score from a player (called when hit by explosion)
-        /// </summary>
-        public void RemoveExplosionScore(int actorNumber)
-        {
-            PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
-            if (player == null)
-            {
-                Debug.LogWarning(
-                    $"[ScoreManager] Player with ActorNumber {actorNumber} not found!"
-                );
-                return;
-            }
-
-            int currentScore = GetPlayerScore(actorNumber);
-            int newScore = Mathf.Max(0, currentScore - scoreLostFromExplosion); // Don't go below 0
-
-            Hashtable props = new Hashtable { { SCORE_KEY, newScore } };
-            player.SetCustomProperties(props);
-
-            Debug.Log(
-                $"[ScoreManager] 💣 {player.NickName} lost {scoreLostFromExplosion} points! (Explosion Hit) | Total: {newScore}"
-            );
-        }
-
-        /// <summary>
-        /// Awards a kill and score to an AI attacker by its negative ID.
+        /// Awards kill credit to an AI attacker by its negative ID.
         /// Called from PlayerHealthComponent when the damage source is an AI.
         /// </summary>
-        public void AddAIDashHitScore(int aiId)
+        public void AddAIKill(int aiId)
         {
+            EnsureAIRegistered(aiId);
+
             if (!aiNames.ContainsKey(aiId))
                 return;
 
-            // AI kill/score tracking is disabled for final leaderboard processing.
+            int newScore = GetAIScore(aiId) + scoreForDashHit;
+            int newKills = GetAIKills(aiId) + 1;
+
+            aiScores[aiId] = newScore;
+            aiKills[aiId] = newKills;
+
+            if (PhotonNetwork.CurrentRoom != null)
+            {
+                Hashtable props = new Hashtable
+                {
+                    { GetAIScoreKey(aiId), newScore },
+                    { GetAIKillsKey(aiId), newKills },
+                };
+                PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+            }
+
             Debug.Log(
-                $"[ScoreManager] AI hit score tracking disabled for {aiNames[aiId]}. "
-                    + "AI final leaderboards use hits taken only."
+                $"[ScoreManager] {aiNames[aiId]} gained kill #{newKills} | Score: {newScore}"
             );
+        }
+
+        private static string GetAIScoreKey(int aiId)
+        {
+            return AI_SCORE_KEY_PREFIX + aiId;
+        }
+
+        private static string GetAIKillsKey(int aiId)
+        {
+            return AI_KILLS_KEY_PREFIX + aiId;
+        }
+
+        private static string GetAIDeathsKey(int aiId)
+        {
+            return AI_DEATHS_KEY_PREFIX + aiId;
+        }
+
+        private void SyncAIStatsFromRoom(int aiId)
+        {
+            EnsureAIRegistered(aiId);
+
+            if (PhotonNetwork.CurrentRoom == null)
+                return;
+
+            if (
+                PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(
+                    GetAIScoreKey(aiId),
+                    out object scoreObj
+                )
+                && scoreObj is int score
+            )
+            {
+                aiScores[aiId] = score;
+            }
+
+            if (
+                PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(
+                    GetAIKillsKey(aiId),
+                    out object killsObj
+                )
+                && killsObj is int kills
+            )
+            {
+                aiKills[aiId] = kills;
+            }
+
+            if (
+                PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(
+                    GetAIDeathsKey(aiId),
+                    out object deathsObj
+                )
+                && deathsObj is int deaths
+            )
+            {
+                aiDeaths[aiId] = deaths;
+            }
+        }
+
+        private void PublishInitialAIStats(int aiId)
+        {
+            if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null)
+                return;
+
+            Hashtable props = new Hashtable();
+
+            if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(GetAIScoreKey(aiId)))
+                props[GetAIScoreKey(aiId)] = GetAIScore(aiId);
+
+            if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(GetAIKillsKey(aiId)))
+                props[GetAIKillsKey(aiId)] = GetAIKills(aiId);
+
+            if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(GetAIDeathsKey(aiId)))
+                props[GetAIDeathsKey(aiId)] = GetAIDeaths(aiId);
+
+            if (props.Count > 0)
+                PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+        }
+
+        private void EnsureAIRegistered(int aiId)
+        {
+            if (aiId == 0)
+                return;
+
+            int aiIndex = Mathf.Abs(aiId);
+
+            if (!aiNames.ContainsKey(aiId))
+                aiNames[aiId] = $"AI_Player_{aiIndex}";
+
+            if (!aiScores.ContainsKey(aiId))
+                aiScores[aiId] = 0;
+
+            if (!aiKills.ContainsKey(aiId))
+                aiKills[aiId] = 0;
+
+            if (!aiDeaths.ContainsKey(aiId))
+                aiDeaths[aiId] = 0;
+
+            if (!aiHitsTaken.ContainsKey(aiId))
+                aiHitsTaken[aiId] = 0;
         }
 
         /// <summary>
@@ -240,11 +326,47 @@ namespace Hanzo.Networking
             return 0;
         }
 
-        public int GetAIScore(int aiId) => aiScores.TryGetValue(aiId, out int s) ? s : 0;
+        public int GetAIScore(int aiId)
+        {
+            if (aiScores.TryGetValue(aiId, out int score))
+                return score;
+
+            if (
+                PhotonNetwork.CurrentRoom != null
+                && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(
+                    GetAIScoreKey(aiId),
+                    out object scoreObj
+                )
+                && scoreObj is int roomScore
+            )
+            {
+                return roomScore;
+            }
+
+            return 0;
+        }
 
         public int GetAIHitsTaken(int aiId) => aiHitsTaken.TryGetValue(aiId, out int hits) ? hits : 0;
 
-        public int GetAIKills(int aiId) => aiKills.TryGetValue(aiId, out int k) ? k : 0;
+        public int GetAIKills(int aiId)
+        {
+            if (aiKills.TryGetValue(aiId, out int kills))
+                return kills;
+
+            if (
+                PhotonNetwork.CurrentRoom != null
+                && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(
+                    GetAIKillsKey(aiId),
+                    out object killsObj
+                )
+                && killsObj is int roomKills
+            )
+            {
+                return roomKills;
+            }
+
+            return 0;
+        }
 
         public int GetAIDeaths(int aiId) => aiDeaths.TryGetValue(aiId, out int d) ? d : 0;
 
@@ -253,9 +375,18 @@ namespace Hanzo.Networking
         /// </summary>
         public void IncrementAIDeaths(int aiId)
         {
+            EnsureAIRegistered(aiId);
+
             if (!aiNames.ContainsKey(aiId))
                 return;
             aiDeaths[aiId] += 1;
+
+            if (PhotonNetwork.CurrentRoom != null)
+            {
+                Hashtable props = new Hashtable { { GetAIDeathsKey(aiId), aiDeaths[aiId] } };
+                PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+            }
+
             Debug.Log($"[ScoreManager] AI {aiNames[aiId]} death count: {aiDeaths[aiId]}");
         }
 
@@ -440,25 +571,38 @@ namespace Hanzo.Networking
             }
         }
 
-        /// <summary>
-        /// Awards leaderboard-eligible score to a player based on hits taken.
-        /// Called for both human and AI attackers.
-        /// </summary>
-        public void AddHitReceivedScore(int victimActorNumber)
+        public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
         {
-            PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(victimActorNumber);
-            if (player == null)
-                return;
+            foreach (System.Collections.DictionaryEntry entry in propertiesThatChanged)
+            {
+                if (!(entry.Key is string key) || !(entry.Value is int value))
+                    continue;
 
-            int currentScore = GetPlayerScore(victimActorNumber);
-            int newScore = currentScore + scoreForDashHit; // reuse existing config
-
-            playerScores[victimActorNumber] = newScore;
-
-            Hashtable props = new Hashtable { { SCORE_KEY, newScore } };
-            player.SetCustomProperties(props);
-
-            Debug.Log($"[ScoreManager] Hit received → {player.NickName} score now {newScore}");
+                if (key.StartsWith(AI_SCORE_KEY_PREFIX))
+                {
+                    if (int.TryParse(key.Substring(AI_SCORE_KEY_PREFIX.Length), out int aiId))
+                    {
+                        EnsureAIRegistered(aiId);
+                        aiScores[aiId] = value;
+                    }
+                }
+                else if (key.StartsWith(AI_KILLS_KEY_PREFIX))
+                {
+                    if (int.TryParse(key.Substring(AI_KILLS_KEY_PREFIX.Length), out int aiId))
+                    {
+                        EnsureAIRegistered(aiId);
+                        aiKills[aiId] = value;
+                    }
+                }
+                else if (key.StartsWith(AI_DEATHS_KEY_PREFIX))
+                {
+                    if (int.TryParse(key.Substring(AI_DEATHS_KEY_PREFIX.Length), out int aiId))
+                    {
+                        EnsureAIRegistered(aiId);
+                        aiDeaths[aiId] = value;
+                    }
+                }
+            }
         }
 
         /// <summary>

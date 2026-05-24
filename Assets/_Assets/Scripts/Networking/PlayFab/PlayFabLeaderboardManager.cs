@@ -1,8 +1,5 @@
-using System.Collections;
 using System.Collections.Generic;
-using ExitGames.Client.Photon;
 using Photon.Pun;
-using Photon.Realtime;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
@@ -11,22 +8,39 @@ using UnityEngine.SceneManagement;
 namespace Hanzo.Networking
 {
     /// <summary>
-    /// Handles end-of-game score submission to PlayFab leaderboards
+    /// Handles end-of-game stat submission to PlayFab leaderboards.
     /// </summary>
     public class PlayFabLeaderboardManager : MonoBehaviourPunCallbacks
     {
         public static PlayFabLeaderboardManager Instance { get; private set; }
 
         [Header("Leaderboard Settings")]
-        // [SerializeField]
-        // private string killsLeaderboardId = "Kills";
+        [SerializeField]
+        private string killsLeaderboardId = "Kills";
 
-        // [SerializeField]
-        // private string scoreLeaderboardId = "Score";
-        [SerializeField] private string hitsLeaderboardId = "TotalHitsTaken";
+        [SerializeField]
+        private string survivalTimeLeaderboardId = "SurvivalTime";
 
-        // [SerializeField]
-        // private string survivorLeaderboardId = "SurvivalTime";
+        [SerializeField]
+        private string totalDeathsLeaderboardId = "TotalDealths";
+
+        [SerializeField]
+        private string totalGamesPlayedLeaderboardId = "TotalGamesPlayed";
+
+        [SerializeField]
+        private string totalHitsTakenLeaderboardId = "TotalHitsTaken";
+
+        [SerializeField]
+        private string totalKillsLeaderboardId = "TotalKills";
+
+        [SerializeField]
+        private string winsLeaderboardId = "Wins";
+
+        [SerializeField]
+        private string averageKDRatioLeaderboardId = "AverageKDRatio";
+
+        [SerializeField]
+        private string deathsLeaderboardId = "Deaths";
 
         [SerializeField]
         private bool debugSubmissions = true;
@@ -64,10 +78,9 @@ namespace Hanzo.Networking
         }
 
         /// <summary>
-        /// Submits all players' final stats to PlayFab leaderboards
-        /// Call this when countdown timer reaches zero
+        /// Submits the local real player's final match stats to PlayFab.
         /// </summary>
-        public void SubmitGameResults()
+        public void SubmitGameResults(float matchSurvivalTimeSeconds = 0f)
         {
             if (!PhotonNetwork.InRoom)
             {
@@ -75,7 +88,9 @@ namespace Hanzo.Networking
                 return;
             }
 
-            Dictionary<int, PlayerGameStats> playerStats = CalculatePlayerStats();
+            Dictionary<int, PlayerGameStats> playerStats = CalculatePlayerStats(
+                matchSurvivalTimeSeconds
+            );
 
             foreach (var kvp in playerStats)
             {
@@ -90,15 +105,15 @@ namespace Hanzo.Networking
             }
         }
 
-        /// <summary>
-        /// Calculate final stats for all players from Photon custom properties
-        /// </summary>
-        private Dictionary<int, PlayerGameStats> CalculatePlayerStats()
+        private Dictionary<int, PlayerGameStats> CalculatePlayerStats(float matchSurvivalTimeSeconds)
         {
             Dictionary<int, PlayerGameStats> stats = new Dictionary<int, PlayerGameStats>();
 
-            if (PhotonNetwork.CurrentRoom == null)
+            if (PhotonNetwork.CurrentRoom == null || NetworkedScoreManager.Instance == null)
                 return stats;
+
+            GetWinningResult(out int winningKillCount, out int winningDeathCount);
+            int survivalTime = Mathf.Max(0, Mathf.RoundToInt(matchSurvivalTimeSeconds));
 
             foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
             {
@@ -107,20 +122,22 @@ namespace Hanzo.Networking
                     PlayFabId = player.UserId,
                     DisplayName = player.NickName,
                     ActorNumber = player.ActorNumber,
-
-                    // Get stats from NetworkedScoreManager
-                    // Score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber),
-                    // Kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber),
+                    Score = NetworkedScoreManager.Instance.GetPlayerScore(player.ActorNumber),
+                    Kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber),
                     Deaths = NetworkedScoreManager.Instance.GetPlayerDeaths(player.ActorNumber),
                     HitsTaken = NetworkedScoreManager.Instance.GetPlayerHitsTaken(
                         player.ActorNumber
                     ),
+                    SurvivalTime = survivalTime,
                 };
 
-                // Calculate derived stats
-                playerStats.Accuracy = CalculateAccuracy(playerStats);
                 playerStats.KillDeathRatio = CalculateKDRatio(playerStats);
-                playerStats.SurvivalScore = CalculateSurvivalScore(playerStats);
+                playerStats.Wins =
+                    winningKillCount > 0
+                    && playerStats.Kills == winningKillCount
+                    && playerStats.Deaths == winningDeathCount
+                        ? 1
+                        : 0;
 
                 stats[player.ActorNumber] = playerStats;
 
@@ -128,7 +145,8 @@ namespace Hanzo.Networking
                 {
                     Debug.Log(
                         $"[Leaderboard] Calculated stats for {playerStats.DisplayName}: "
-                            + $"HitsTaken={playerStats.HitsTaken}, Deaths={playerStats.Deaths}"
+                            + $"Kills={playerStats.Kills}, Deaths={playerStats.Deaths}, "
+                            + $"HitsTaken={playerStats.HitsTaken}, Wins={playerStats.Wins}"
                     );
                 }
             }
@@ -136,31 +154,50 @@ namespace Hanzo.Networking
             return stats;
         }
 
-        /// <summary>
-        /// Submit a single player's stats to PlayFab
-        /// </summary>
         private void SubmitPlayerStats(PlayerGameStats stats)
         {
-            Debug.Log($"[Leaderboard] Submitting stats for {stats.DisplayName}: HitsTaken={stats.HitsTaken}");
+            Debug.Log(
+                $"[Leaderboard] Submitting stats for {stats.DisplayName}: "
+                    + $"Kills={stats.Kills}, Deaths={stats.Deaths}, Wins={stats.Wins}"
+            );
 
-            // SubmitToLeaderboard(stats.Score, scoreLeaderboardId, stats.DisplayName);
-            // SubmitToLeaderboard(stats.Kills, killsLeaderboardId, stats.DisplayName);
-            // SubmitToLeaderboard((int)stats.SurvivalScore, survivorLeaderboardId, stats.DisplayName);
-            SubmitToLeaderboard(stats.HitsTaken, hitsLeaderboardId, stats.DisplayName);
-
-            UpdatePlayerStatistics(stats);
-        }
-
-        /// <summary>
-        /// Submit a score to a specific PlayFab leaderboard
-        /// </summary>
-        private void SubmitToLeaderboard(int score, string leaderboardId, string playerName)
-        {
             var request = new UpdatePlayerStatisticsRequest
             {
                 Statistics = new List<StatisticUpdate>
                 {
-                    new StatisticUpdate { StatisticName = leaderboardId, Value = score },
+                    new StatisticUpdate { StatisticName = killsLeaderboardId, Value = stats.Kills },
+                    new StatisticUpdate
+                    {
+                        StatisticName = survivalTimeLeaderboardId,
+                        Value = stats.SurvivalTime,
+                    },
+                    new StatisticUpdate
+                    {
+                        StatisticName = totalDeathsLeaderboardId,
+                        Value = stats.Deaths,
+                    },
+                    new StatisticUpdate
+                    {
+                        StatisticName = totalGamesPlayedLeaderboardId,
+                        Value = 1,
+                    },
+                    new StatisticUpdate
+                    {
+                        StatisticName = totalHitsTakenLeaderboardId,
+                        Value = stats.HitsTaken,
+                    },
+                    new StatisticUpdate
+                    {
+                        StatisticName = totalKillsLeaderboardId,
+                        Value = stats.Kills,
+                    },
+                    new StatisticUpdate { StatisticName = winsLeaderboardId, Value = stats.Wins },
+                    new StatisticUpdate
+                    {
+                        StatisticName = averageKDRatioLeaderboardId,
+                        Value = Mathf.RoundToInt(stats.KillDeathRatio * 100f),
+                    },
+                    new StatisticUpdate { StatisticName = deathsLeaderboardId, Value = stats.Deaths },
                 },
             };
 
@@ -169,67 +206,61 @@ namespace Hanzo.Networking
                 result =>
                 {
                     if (debugSubmissions)
-                    {
-                        Debug.Log(
-                            $"[Leaderboard] ✅ Submitted {leaderboardId}: {score} for {playerName}"
-                        );
-                    }
+                        Debug.Log($"[Leaderboard] Submitted match stats for {stats.DisplayName}");
                 },
                 error =>
-                {
                     Debug.LogError(
-                        $"[Leaderboard] ❌ Failed to submit {leaderboardId}: {error.GenerateErrorReport()}"
-                    );
-                }
-            );
-        }
-
-        /// <summary>
-        /// Update comprehensive player statistics
-        /// </summary>
-        private void UpdatePlayerStatistics(PlayerGameStats stats)
-        {
-            var statistics = new List<StatisticUpdate>
-            {
-                new StatisticUpdate { StatisticName = "TotalGamesPlayed", Value = 1 }, // Increment
-                // new StatisticUpdate { StatisticName = "TotalKills", Value = stats.Kills },
-                new StatisticUpdate { StatisticName = "TotalDeaths", Value = stats.Deaths },
-                // new StatisticUpdate { StatisticName = "TotalScore", Value = stats.Score },
-                // new StatisticUpdate
-                // {
-                //     StatisticName = "AverageKDRatio",
-                //     Value = (int)(stats.KillDeathRatio * 100),
-                // }, // Store as int (multiply by 100)
-                new StatisticUpdate { StatisticName = "TotalHitsTaken", Value = stats.HitsTaken },
-            };
-
-            var request = new UpdatePlayerStatisticsRequest { Statistics = statistics };
-
-            PlayFabClientAPI.UpdatePlayerStatistics(
-                request,
-                result =>
-                    Debug.Log($"[Leaderboard] Updated player statistics for {stats.DisplayName}"),
-                error =>
-                    Debug.LogError(
-                        $"[Leaderboard] Failed to update statistics: {error.GenerateErrorReport()}"
+                        $"[Leaderboard] Failed to submit match stats: {error.GenerateErrorReport()}"
                     )
             );
         }
 
-        /// <summary>
-        /// Calculate accuracy (kills / hits taken ratio)
-        /// </summary>
-        private float CalculateAccuracy(PlayerGameStats stats)
+        private void GetWinningResult(out int winningKillCount, out int winningDeathCount)
         {
-            if (stats.HitsTaken == 0)
-                return stats.Kills > 0 ? 100f : 0f;
+            winningKillCount = 0;
+            winningDeathCount = int.MaxValue;
 
-            return (float)stats.Kills / stats.HitsTaken * 100f;
+            if (NetworkedScoreManager.Instance == null)
+            {
+                winningDeathCount = 0;
+                return;
+            }
+
+            if (PhotonNetwork.CurrentRoom != null)
+            {
+                foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
+                {
+                    int kills = NetworkedScoreManager.Instance.GetPlayerKills(player.ActorNumber);
+                    int deaths = NetworkedScoreManager.Instance.GetPlayerDeaths(player.ActorNumber);
+                    UpdateWinningResult(kills, deaths, ref winningKillCount, ref winningDeathCount);
+                }
+            }
+
+            foreach (var aiPlayer in NetworkedScoreManager.Instance.GetAIPlayerNames())
+            {
+                int kills = NetworkedScoreManager.Instance.GetAIKills(aiPlayer.Key);
+                int deaths = NetworkedScoreManager.Instance.GetAIDeaths(aiPlayer.Key);
+                UpdateWinningResult(kills, deaths, ref winningKillCount, ref winningDeathCount);
+            }
+
+            if (winningDeathCount == int.MaxValue)
+                winningDeathCount = 0;
         }
 
-        /// <summary>
-        /// Calculate K/D ratio
-        /// </summary>
+        private void UpdateWinningResult(
+            int kills,
+            int deaths,
+            ref int winningKillCount,
+            ref int winningDeathCount
+        )
+        {
+            if (kills > winningKillCount || (kills == winningKillCount && deaths < winningDeathCount))
+            {
+                winningKillCount = kills;
+                winningDeathCount = deaths;
+            }
+        }
+
         private float CalculateKDRatio(PlayerGameStats stats)
         {
             if (stats.Deaths == 0)
@@ -238,20 +269,6 @@ namespace Hanzo.Networking
             return (float)stats.Kills / stats.Deaths;
         }
 
-        /// <summary>
-        /// Calculate survival score (how long they lasted / hits taken)
-        /// Lower hits taken = higher score
-        /// </summary>
-        private float CalculateSurvivalScore(PlayerGameStats stats)
-        {
-            // Formula: (Kills * 10) - (Deaths * 5) - (HitsTaken * 2)
-            // Incentivizes kills and survival, penalizes deaths
-            return (stats.Kills * 10) - (stats.Deaths * 5) - (stats.HitsTaken * 2);
-        }
-
-        /// <summary>
-        /// Get leaderboard data from PlayFab
-        /// </summary>
         public void GetLeaderboard(string leaderboardId, int maxResults = 10)
         {
             var request = new GetLeaderboardRequest
@@ -280,24 +297,19 @@ namespace Hanzo.Networking
         }
     }
 
-    /// <summary>
-    /// Data structure for player game stats
-    /// </summary>
     public struct PlayerGameStats
     {
         public string PlayFabId;
         public string DisplayName;
         public int ActorNumber;
 
-        // Raw stats from Photon
         public int Score;
         public int Kills;
         public int Deaths;
         public int HitsTaken;
+        public int SurvivalTime;
+        public int Wins;
 
-        // Calculated stats
-        public float Accuracy;
         public float KillDeathRatio;
-        public float SurvivalScore;
     }
 }

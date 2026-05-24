@@ -333,7 +333,9 @@ public class PhotonCountdownTimer : MonoBehaviourPunCallbacks
         if (submitToPlayFab && Hanzo.Networking.PlayFabLeaderboardManager.Instance != null)
         {
             Debug.Log("[Timer] Submitting game results to PlayFab...");
-            Hanzo.Networking.PlayFabLeaderboardManager.Instance.SubmitGameResults();
+            Hanzo.Networking.PlayFabLeaderboardManager.Instance.SubmitGameResults(
+                countdownDuration
+            );
         }
 
         if (PhotonNetwork.IsMasterClient)
