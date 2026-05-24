@@ -1,0 +1,799 @@
+fileFormatVersion: 2
+guid: 9621b542ef9694882bf6a4ea53d6c406
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 0
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: craiyon_163159_image_0
+      rect:
+        serializedVersion: 2
+        x: 41
+        y: 824
+        width: 263
+        height: 253
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline:
+      - - {x: -15.5, y: -126.5}
+        - {x: 124.5, y: -126.5}
+        - {x: 131.5, y: 44.5}
+        - {x: 113.5, y: 87.5}
+        - {x: 53.5, y: 126.5}
+        - {x: -32.5, y: 126.5}
+        - {x: -122.5, y: 57.5}
+        - {x: -122.5, y: 15.5}
+        - {x: -124.5, y: 14.5}
+        - {x: -124.5, y: 8.5}
+        - {x: -122.5, y: 8.5}
+        - {x: -122.5, y: -126.5}
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 7cad5d5c5989746c89497e0a211c71d5
+      internalID: 1485736772
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_1
+      rect:
+        serializedVersion: 2
+        x: 15
+        y: 657
+        width: 285
+        height: 145
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5127e9b788f864a309a7f560e51719a4
+      internalID: -343020145
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_2
+      rect:
+        serializedVersion: 2
+        x: 14
+        y: 515
+        width: 281
+        height: 135
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4256b627c8cd64638958e6479d5d5746
+      internalID: -1626139207
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_3
+      rect:
+        serializedVersion: 2
+        x: 20
+        y: 372
+        width: 258
+        height: 131
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f6335a55ffc2947d2bb377901000bede
+      internalID: 716790791
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_4
+      rect:
+        serializedVersion: 2
+        x: 17
+        y: 98
+        width: 179
+        height: 117
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6740317bb7c884d8a823438e6dbd47af
+      internalID: -1626641639
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_5
+      rect:
+        serializedVersion: 2
+        x: 209
+        y: 97
+        width: 154
+        height: 123
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9db5c41bb469d4ad9b367b9b6d58e073
+      internalID: 1464834517
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_6
+      rect:
+        serializedVersion: 2
+        x: 376
+        y: 98
+        width: 176
+        height: 110
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 928a5e504aeff46838b76f513c00c2d2
+      internalID: -264531291
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_7
+      rect:
+        serializedVersion: 2
+        x: 565
+        y: 97
+        width: 173
+        height: 113
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 420c7f669d0454eb6a7b8efba9264030
+      internalID: -946452647
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_8
+      rect:
+        serializedVersion: 2
+        x: 756
+        y: 92
+        width: 177
+        height: 123
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e9aac45d33d834f7eb55ae42393d8703
+      internalID: 475220304
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_9
+      rect:
+        serializedVersion: 2
+        x: 527
+        y: 218
+        width: 64
+        height: 63
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 17502bb8378934e5190293724e31e50e
+      internalID: 822045791
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_10
+      rect:
+        serializedVersion: 2
+        x: 520
+        y: 286
+        width: 76
+        height: 72
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: faad5e6f476f146cdaf37b34581f4b16
+      internalID: 762542027
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_11
+      rect:
+        serializedVersion: 2
+        x: 608
+        y: 284
+        width: 67
+        height: 71
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c2531529f02f2443aa35e66813f4ddf6
+      internalID: -524679896
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_12
+      rect:
+        serializedVersion: 2
+        x: 604
+        y: 220
+        width: 66
+        height: 56
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6b615688af4ae4e7090c11defd845156
+      internalID: 1727886027
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_13
+      rect:
+        serializedVersion: 2
+        x: 685
+        y: 284
+        width: 68
+        height: 67
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 057e3df6f58ed4edaaada5688e604011
+      internalID: -1798509443
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_14
+      rect:
+        serializedVersion: 2
+        x: 781
+        y: 289
+        width: 58
+        height: 56
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b37513031c64b4be0b6bcbea909f820e
+      internalID: 1478462231
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_15
+      rect:
+        serializedVersion: 2
+        x: 680
+        y: 218
+        width: 61
+        height: 58
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: cfdf07744a11c412c88d18dfcaa9fd91
+      internalID: 1517135960
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_16
+      rect:
+        serializedVersion: 2
+        x: 751
+        y: 220
+        width: 59
+        height: 59
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 91248a1bc4bfe4f5f8a9dbffa0beaee2
+      internalID: -874277960
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_17
+      rect:
+        serializedVersion: 2
+        x: 284
+        y: 418
+        width: 389
+        height: 469
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline:
+      - - {x: -149.5, y: 234.5}
+        - {x: -155.5, y: 153.5}
+        - {x: -194.5, y: -234.5}
+        - {x: -129.5, y: -234.5}
+        - {x: -130.5, y: -231.5}
+        - {x: -126.5, y: -231.5}
+        - {x: -128.5, y: -233.5}
+        - {x: -128.5, y: -234.5}
+        - {x: 52.5, y: -234.5}
+        - {x: 52.5, y: -233.5}
+        - {x: 53.5, y: -234.5}
+        - {x: 160.5, y: -231.5}
+        - {x: 167.5, y: -144.5}
+        - {x: 184.5, y: 51.5}
+        - {x: 194.5, y: 234.5}
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 11c7e24a82f5147dc806baf864d3d883
+      internalID: -1412610347
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_18
+      rect:
+        serializedVersion: 2
+        x: 669
+        y: 641
+        width: 351
+        height: 250
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4d3ce6a75f4a64dbc8a2784bc49ad4ee
+      internalID: -710085007
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_19
+      rect:
+        serializedVersion: 2
+        x: 655
+        y: 416
+        width: 343
+        height: 227
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 98290c7d807cb42dd860d62abf2542b1
+      internalID: 821211327
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_20
+      rect:
+        serializedVersion: 2
+        x: 1018
+        y: 665
+        width: 396
+        height: 217
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8e7517e15d3274a6594e2a7bb0c1d9b3
+      internalID: 886525047
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_21
+      rect:
+        serializedVersion: 2
+        x: 994
+        y: 438
+        width: 416
+        height: 229
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 97a3612bceb524f17b60c763f48e9860
+      internalID: -1805060395
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_22
+      rect:
+        serializedVersion: 2
+        x: 918
+        y: 217
+        width: 521
+        height: 205
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline:
+      - - {x: -254.5, y: -59.5}
+        - {x: -260.5, y: -109.5}
+        - {x: 171.5, y: -112.5}
+        - {x: 186.5, y: -107.5}
+        - {x: 221.5, y: -16.5}
+        - {x: 260.5, y: 112.5}
+        - {x: -216.5, y: 86.5}
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e3706c73e18ab46f6a9712104ffa2db1
+      internalID: 99010706
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_23
+      rect:
+        serializedVersion: 2
+        x: 1174
+        y: 893
+        width: 85
+        height: 85
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9dc4878ce23604db89a3006fda0ff80e
+      internalID: 1578019174
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_24
+      rect:
+        serializedVersion: 2
+        x: 1071
+        y: 893
+        width: 85
+        height: 83
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b5330fc31126e49c194cd2b077087326
+      internalID: -1050085620
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_25
+      rect:
+        serializedVersion: 2
+        x: 960
+        y: 896
+        width: 94
+        height: 82
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 35d5b3f39ca0c4b59b8911e3c02ac327
+      internalID: -1424584225
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_26
+      rect:
+        serializedVersion: 2
+        x: 849
+        y: 897
+        width: 93
+        height: 85
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: bf970dcb6ecea4d6a83dca703b5b12ce
+      internalID: 645953008
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_27
+      rect:
+        serializedVersion: 2
+        x: 26
+        y: 271
+        width: 475
+        height: 76
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6855f7d6bcb0c4b0bb62d15a68deb64f
+      internalID: 188833972
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: craiyon_163159_image_28
+      rect:
+        serializedVersion: 2
+        x: 856
+        y: 286
+        width: 59
+        height: 58
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a87b95e41d7b6499d8c884adda621e28
+      internalID: -1846979617
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 89d552d99198c4f58ac196134c0fed07
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      craiyon_163159_image_0: 1485736772
+      craiyon_163159_image_1: -343020145
+      craiyon_163159_image_10: 762542027
+      craiyon_163159_image_11: -524679896
+      craiyon_163159_image_12: 1727886027
+      craiyon_163159_image_13: -1798509443
+      craiyon_163159_image_14: 1478462231
+      craiyon_163159_image_15: 1517135960
+      craiyon_163159_image_16: -874277960
+      craiyon_163159_image_17: -1412610347
+      craiyon_163159_image_18: -710085007
+      craiyon_163159_image_19: 821211327
+      craiyon_163159_image_2: -1626139207
+      craiyon_163159_image_20: 886525047
+      craiyon_163159_image_21: -1805060395
+      craiyon_163159_image_22: 99010706
+      craiyon_163159_image_23: 1578019174
+      craiyon_163159_image_24: -1050085620
+      craiyon_163159_image_25: -1424584225
+      craiyon_163159_image_26: 645953008
+      craiyon_163159_image_27: 188833972
+      craiyon_163159_image_28: -1846979617
+      craiyon_163159_image_3: 716790791
+      craiyon_163159_image_4: -1626641639
+      craiyon_163159_image_5: 1464834517
+      craiyon_163159_image_6: -264531291
+      craiyon_163159_image_7: -946452647
+      craiyon_163159_image_8: 475220304
+      craiyon_163159_image_9: 822045791
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
