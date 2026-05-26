@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Photon.Pun;
 using PlayFab;
@@ -22,7 +23,7 @@ namespace Hanzo.Networking
         private string survivalTimeLeaderboardId = "SurvivalTime";
 
         [SerializeField]
-        private string totalDeathsLeaderboardId = "TotalDealths";
+        private string totalDeathsLeaderboardId = "TotalDeaths";
 
         [SerializeField]
         private string totalGamesPlayedLeaderboardId = "TotalGamesPlayed";
@@ -44,6 +45,10 @@ namespace Hanzo.Networking
 
         [SerializeField]
         private bool debugSubmissions = true;
+
+        private const float StatSettleDelaySeconds = 0.25f;
+        private Coroutine pendingSubmitCoroutine;
+        private bool hasSubmittedGameResults;
 
         private void Awake()
         {
@@ -82,11 +87,32 @@ namespace Hanzo.Networking
         /// </summary>
         public void SubmitGameResults(float matchSurvivalTimeSeconds = 0f)
         {
+            if (hasSubmittedGameResults || pendingSubmitCoroutine != null)
+                return;
+
             if (!PhotonNetwork.InRoom)
             {
                 Debug.LogWarning("[Leaderboard] Not in a room!");
                 return;
             }
+
+            pendingSubmitCoroutine = StartCoroutine(
+                SubmitGameResultsAfterStatsSettle(matchSurvivalTimeSeconds)
+            );
+        }
+
+        private IEnumerator SubmitGameResultsAfterStatsSettle(float matchSurvivalTimeSeconds)
+        {
+            yield return new WaitForSecondsRealtime(StatSettleDelaySeconds);
+            pendingSubmitCoroutine = null;
+
+            if (!PhotonNetwork.InRoom)
+            {
+                Debug.LogWarning("[Leaderboard] Left room before match stats could submit.");
+                yield break;
+            }
+
+            hasSubmittedGameResults = true;
 
             Dictionary<int, PlayerGameStats> playerStats = CalculatePlayerStats(
                 matchSurvivalTimeSeconds

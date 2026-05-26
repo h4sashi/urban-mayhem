@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Photon.Pun;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
@@ -59,7 +60,6 @@ namespace Hanzo.Networking.PlayFab
         void OnDisable()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
-            PlayerPrefs.DeleteAll();
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -225,9 +225,17 @@ namespace Hanzo.Networking.PlayFab
             GetPlayerProfile(
                 profileResult =>
                 {
-                    PlayerDisplayName =
-                        profileResult.PlayerProfile?.DisplayName
-                        ?? "Player" + Random.Range(1000, 9999);
+                    PlayerDisplayName = profileResult.PlayerProfile?.DisplayName;
+
+                    if (!string.IsNullOrWhiteSpace(PlayerDisplayName))
+                    {
+                        ApplyPlayerDisplayName(PlayerDisplayName);
+                    }
+                    else
+                    {
+                        ClearPlayerDisplayName();
+                    }
+
                     Debug.Log($"[PlayFab] Display name loaded: {PlayerDisplayName}");
                     LoadNextScene();
                 },
@@ -237,6 +245,7 @@ namespace Hanzo.Networking.PlayFab
                         "[PlayFab] Could not fetch display name: " + error.ErrorMessage
                     );
                     PlayerDisplayName = "Player" + Random.Range(1000, 9999);
+                    ApplyPlayerDisplayName(PlayerDisplayName);
                     LoadNextScene();
                 }
             );
@@ -248,9 +257,31 @@ namespace Hanzo.Networking.PlayFab
             Debug.Log("Registration successful! PlayFab ID: " + result.PlayFabId);
             PlayFabId = result.PlayFabId;
             PlayerEmail = signUpEmailInput.text.ToLower().Trim();
+            ClearPlayerDisplayName();
 
             UpdateStatus("Registration successful!");
             LoadNextScene();
+        }
+
+        public void ApplyPlayerDisplayName(string displayName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                return;
+            }
+
+            PlayerDisplayName = displayName.Trim();
+            PlayerPrefs.SetString("USERNAME", PlayerDisplayName);
+            PlayerPrefs.Save();
+            PhotonNetwork.NickName = PlayerDisplayName;
+        }
+
+        public void ClearPlayerDisplayName()
+        {
+            PlayerDisplayName = string.Empty;
+            PlayerPrefs.DeleteKey("USERNAME");
+            PlayerPrefs.Save();
+            PhotonNetwork.NickName = string.Empty;
         }
 
         private void OnPasswordRecoverySuccess(SendAccountRecoveryEmailResult result)

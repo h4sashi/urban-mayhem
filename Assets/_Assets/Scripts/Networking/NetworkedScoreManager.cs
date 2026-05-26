@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using ExitGames.Client.Photon;
+using Hanzo.AI;
 using Photon.Pun;
 using UnityEngine;
 using PhotonPlayer = Photon.Realtime.Player;
@@ -33,9 +34,23 @@ namespace Hanzo.Networking
         private const string AI_SCORE_KEY_PREFIX = "AIScore_";
         private const string AI_KILLS_KEY_PREFIX = "AIKills_";
         private const string AI_DEATHS_KEY_PREFIX = "AIDeaths_";
+        private const string AI_NAME_KEY_PREFIX = "AIName_";
 
         // In NetworkedScoreManager
-        public Dictionary<int, string> GetAIPlayerNames() => new Dictionary<int, string>(aiNames);
+        public Dictionary<int, string> GetAIPlayerNames()
+        {
+            Dictionary<int, string> catalogNames = new Dictionary<int, string>();
+
+            foreach (int aiId in aiNames.Keys)
+                catalogNames[aiId] = GetDefaultAIName(aiId);
+
+            return catalogNames;
+        }
+
+        public static string GetDefaultAIName(int aiId)
+        {
+            return AINameCatalog.GetNameForId(aiId);
+        }
 
         // Add to local cache
         private Dictionary<int, int> playerDeaths = new Dictionary<int, int>();
@@ -61,10 +76,23 @@ namespace Hanzo.Networking
             for (int i = 0; i < count; i++)
             {
                 int aiId = -(i + 1);
-                EnsureAIRegistered(aiId);
+                RegisterAIPlayer(aiId, GetDefaultAIName(aiId));
                 SyncAIStatsFromRoom(aiId);
                 PublishInitialAIStats(aiId);
             }
+        }
+
+        public void RegisterAIPlayer(int aiId, string displayName)
+        {
+            _ = displayName;
+            if (aiId == 0)
+                return;
+
+            EnsureAIRegistered(aiId);
+            // Keep the catalog as the single source of truth for AI names.
+            aiNames[aiId] = GetDefaultAIName(aiId);
+
+            PublishInitialAIStats(aiId);
         }
 
         // Returns real and AI hit scores for match result displays.
@@ -77,7 +105,7 @@ namespace Hanzo.Networking
                     scores[player.NickName] = GetPlayerScore(player.ActorNumber);
 
             foreach (var aiPlayer in aiNames)
-                scores[aiPlayer.Value + " [AI]"] = GetAIScore(aiPlayer.Key);
+                scores[aiPlayer.Value] = GetAIScore(aiPlayer.Key);
 
             return scores;
         }
@@ -129,8 +157,8 @@ namespace Hanzo.Networking
         public int GetPlayerKills(int actorNumber)
         {
             // Check local cache first (immediately consistent)
-            if (playerKills.TryGetValue(actorNumber, out int cached))
-                return cached;
+            if (playerKills.TryGetValue(actorNumber, out int cachedKills))
+                return cachedKills;
 
             // Fallback to Photon custom properties
             PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
@@ -223,6 +251,11 @@ namespace Hanzo.Networking
             return AI_DEATHS_KEY_PREFIX + aiId;
         }
 
+        private static string GetAINameKey(int aiId)
+        {
+            return AI_NAME_KEY_PREFIX + aiId;
+        }
+
         private void SyncAIStatsFromRoom(int aiId)
         {
             EnsureAIRegistered(aiId);
@@ -262,6 +295,11 @@ namespace Hanzo.Networking
             {
                 aiDeaths[aiId] = deaths;
             }
+
+            if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(GetAINameKey(aiId)))
+            {
+                aiNames[aiId] = GetDefaultAIName(aiId);
+            }
         }
 
         private void PublishInitialAIStats(int aiId)
@@ -280,8 +318,17 @@ namespace Hanzo.Networking
             if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(GetAIDeathsKey(aiId)))
                 props[GetAIDeathsKey(aiId)] = GetAIDeaths(aiId);
 
+            if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(GetAINameKey(aiId)))
+                props[GetAINameKey(aiId)] = GetAIName(aiId);
+
             if (props.Count > 0)
                 PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+        }
+
+        public string GetAIName(int aiId)
+        {
+            EnsureAIRegistered(aiId);
+            return GetDefaultAIName(aiId);
         }
 
         private void EnsureAIRegistered(int aiId)
@@ -289,10 +336,8 @@ namespace Hanzo.Networking
             if (aiId == 0)
                 return;
 
-            int aiIndex = Mathf.Abs(aiId);
-
             if (!aiNames.ContainsKey(aiId))
-                aiNames[aiId] = $"AI_Player_{aiIndex}";
+                aiNames[aiId] = GetDefaultAIName(aiId);
 
             if (!aiScores.ContainsKey(aiId))
                 aiScores[aiId] = 0;
@@ -312,15 +357,33 @@ namespace Hanzo.Networking
         /// </summary>
         public int GetAIId(GameObject obj)
         {
+            if (obj == null)
+                return 0;
+
+            AIPlayerController aiController = obj.GetComponentInParent<AIPlayerController>();
+            if (aiController != null && aiController.AIId != 0)
+            {
+                EnsureAIRegistered(aiController.AIId);
+                aiNames[aiController.AIId] = aiController.AIDisplayName;
+                return aiController.AIId;
+            }
+
             Transform current = obj.transform;
             while (current != null)
             {
                 string objName = current.gameObject.name;
+                if (AINameCatalog.TryGetIdFromPrefabName(objName, out int parsedId))
+                {
+                    EnsureAIRegistered(parsedId);
+                    return parsedId;
+                }
+
                 foreach (var kvp in aiNames)
                 {
-                    if (objName.Contains(kvp.Value))
+                    if (objName.Equals(kvp.Value) || objName.Contains(kvp.Value))
                         return kvp.Key;
                 }
+
                 current = current.parent;
             }
             return 0;
@@ -423,6 +486,9 @@ namespace Hanzo.Networking
             int currentDeaths = GetPlayerDeaths(actorNumber);
             int newDeaths = currentDeaths + 1;
 
+            // Keep the local snapshot correct for immediate game-over submission.
+            playerDeaths[actorNumber] = newDeaths;
+
             Hashtable props = new Hashtable { { DEATHS_KEY, newDeaths } };
             player.SetCustomProperties(props);
 
@@ -440,6 +506,9 @@ namespace Hanzo.Networking
         /// </summary>
         public int GetPlayerDeaths(int actorNumber)
         {
+            if (playerDeaths.TryGetValue(actorNumber, out int cachedDeaths))
+                return cachedDeaths;
+
             PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
             if (player == null)
                 return 0;
@@ -470,6 +539,8 @@ namespace Hanzo.Networking
             int currentHits = GetPlayerHitsTaken(actorNumber);
             int newHits = currentHits + 1;
 
+            playerHitsTaken[actorNumber] = newHits;
+
             Hashtable props = new Hashtable { { HITS_TAKEN_KEY, newHits } };
             player.SetCustomProperties(props);
 
@@ -486,6 +557,8 @@ namespace Hanzo.Networking
             PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
             if (player == null)
                 return;
+
+            playerHitsTaken[actorNumber] = 0;
 
             Hashtable props = new Hashtable { { HITS_TAKEN_KEY, 0 } };
             player.SetCustomProperties(props);
@@ -518,6 +591,9 @@ namespace Hanzo.Networking
         /// </summary>
         public int GetPlayerHitsTaken(int actorNumber)
         {
+            if (playerHitsTaken.TryGetValue(actorNumber, out int cachedHits))
+                return cachedHits;
+
             PhotonPlayer player = PhotonNetwork.CurrentRoom?.GetPlayer(actorNumber);
             if (player == null)
                 return 0;
@@ -557,6 +633,19 @@ namespace Hanzo.Networking
                 playerHitsTaken[targetPlayer.ActorNumber] = newHits;
             }
 
+            if (changedProps.ContainsKey(KILLS_KEY))
+            {
+                int newKills = (int)changedProps[KILLS_KEY];
+                playerKills[targetPlayer.ActorNumber] = newKills;
+
+                if (showDebugInfo)
+                {
+                    Debug.Log(
+                        $"[ScoreManager] {targetPlayer.NickName}'s kills updated: {newKills}"
+                    );
+                }
+            }
+
             if (changedProps.ContainsKey(DEATHS_KEY))
             {
                 int newDeaths = (int)changedProps[DEATHS_KEY];
@@ -575,7 +664,23 @@ namespace Hanzo.Networking
         {
             foreach (System.Collections.DictionaryEntry entry in propertiesThatChanged)
             {
-                if (!(entry.Key is string key) || !(entry.Value is int value))
+                if (!(entry.Key is string key))
+                    continue;
+
+                if (key.StartsWith(AI_NAME_KEY_PREFIX))
+                {
+                    if (
+                        int.TryParse(key.Substring(AI_NAME_KEY_PREFIX.Length), out int aiId)
+                    )
+                    {
+                        EnsureAIRegistered(aiId);
+                        aiNames[aiId] = GetDefaultAIName(aiId);
+                    }
+
+                    continue;
+                }
+
+                if (!(entry.Value is int value))
                     continue;
 
                 if (key.StartsWith(AI_SCORE_KEY_PREFIX))
@@ -633,6 +738,14 @@ namespace Hanzo.Networking
                     $"{player.NickName}: Score={score} | Hits={hits}/8 | Kills={kills} | Deaths={deaths}"
                 );
             }
+
+            foreach (var aiPlayer in aiNames)
+            {
+                int aiId = aiPlayer.Key;
+                Debug.Log(
+                    $"{GetAIName(aiId)}: Score={GetAIScore(aiId)} | Hits={GetAIHitsTaken(aiId)}/8 | Kills={GetAIKills(aiId)} | Deaths={GetAIDeaths(aiId)}"
+                );
+            }
             Debug.Log("====================================");
         }
 
@@ -658,6 +771,18 @@ namespace Hanzo.Networking
                     GUILayout.Label($"  Hits: {hits}/8");
                     GUILayout.Label($"  Kills: {kills}");
                     GUILayout.Label($"  Deaths: {deaths}");
+                    GUILayout.Space(5);
+                }
+
+                foreach (var aiPlayer in aiNames)
+                {
+                    int aiId = aiPlayer.Key;
+
+                    GUILayout.Label($"{GetAIName(aiId)}:");
+                    GUILayout.Label($"  Score: {GetAIScore(aiId)}");
+                    GUILayout.Label($"  Hits: {GetAIHitsTaken(aiId)}/8");
+                    GUILayout.Label($"  Kills: {GetAIKills(aiId)}");
+                    GUILayout.Label($"  Deaths: {GetAIDeaths(aiId)}");
                     GUILayout.Space(5);
                 }
             }

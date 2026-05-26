@@ -14419,7 +14419,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 25.7, y: 0}
+  m_AnchoredPosition: {x: 25.700012, y: 0}
   m_SizeDelta: {x: -372.5, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &235537520
@@ -17789,7 +17789,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0}
   m_AnchorMax: {x: 1, y: 0}
-  m_AnchoredPosition: {x: -62.5, y: 6.7}
+  m_AnchoredPosition: {x: -62.5, y: 6.699997}
   m_SizeDelta: {x: 172.9, y: 45.7}
   m_Pivot: {x: 1, y: 0}
 --- !u!114 &292412832
@@ -93547,7 +93547,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 58, y: 8.19}
+  m_AnchoredPosition: {x: 58, y: 8.190002}
   m_SizeDelta: {x: 234.65, y: 50.912}
   m_Pivot: {x: 0, y: 0}
 --- !u!114 &1645723946
@@ -110926,7 +110926,7 @@ MonoBehaviour:
   signUpPasswordInput: {fileID: 1804882744}
   nextSceneName: Main
   statusText: {fileID: 484982200}
-  useDefaultLogin: 0
+  useDefaultLogin: 1
 --- !u!4 &1947710856
 Transform:
   m_ObjectHideFlags: 0

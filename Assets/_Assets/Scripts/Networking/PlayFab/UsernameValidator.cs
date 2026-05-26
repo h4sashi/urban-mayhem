@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Hanzo.Core;
+using Photon.Pun;
 using PlayFab;
 using PlayFab.ClientModels;
 using TMPro;
@@ -38,6 +39,8 @@ namespace Hanzo.Networking.PlayFab
                 return;
             }
 
+            ApplyCachedUsername();
+
             // Check if player has a username
             CheckPlayerUsername();
         }
@@ -49,31 +52,25 @@ namespace Hanzo.Networking.PlayFab
 
         private void OnProfileSuccess(GetPlayerProfileResult result)
         {
-            string displayName = result.PlayerProfile.DisplayName;
+            string displayName = result.PlayerProfile?.DisplayName;
 
             if (string.IsNullOrEmpty(displayName))
             {
                 // No username set - show username setup UI
                 Debug.Log("No username found. Prompting user to create one.");
+                currentUsername = string.Empty;
+                PlayFabManager.Instance.ClearPlayerDisplayName();
+                if (playerProfileNameText != null)
+                {
+                    playerProfileNameText.text = string.Empty;
+                }
                 EnableUsernameSetup(true);
             }
             else
             {
                 // Username exists - disable setup UI and show username
                 Debug.Log("Username found: " + displayName);
-                PlayFabManager.Instance.PlayerDisplayName = displayName;
-
-                if (playerProfileNameText != null)
-                {
-                    playerProfileNameText.text = displayName;
-                    currentUsername = displayName;
-                    StartCoroutine(
-                        GameObject
-                            .FindAnyObjectByType<ShopManager>()
-                            .FetchPlayerData(displayName)
-                    );
-                    PlayerPrefs.SetString("USERNAME", displayName);
-                }
+                ApplyUsername(displayName, true);
 
                 EnableUsernameSetup(false);
             }
@@ -148,18 +145,7 @@ namespace Hanzo.Networking.PlayFab
             Debug.Log("Username set successfully: " + result.DisplayName);
             PlayFabManager.Instance.PlayerDisplayName = result.DisplayName;
 
-            if (playerProfileNameText != null)
-            {
-                playerProfileNameText.text = result.DisplayName;
-                currentUsername = result.DisplayName;
-                
-                PlayerPrefs.SetString("USERNAME", result.DisplayName);
-                StartCoroutine(
-                    GameObject
-                        .FindAnyObjectByType<ShopManager>()
-                        .FetchPlayerData(result.DisplayName)
-                );
-            }
+            ApplyUsername(result.DisplayName, true);
 
             UpdateStatus("Username set successfully!");
 
@@ -195,6 +181,49 @@ namespace Hanzo.Networking.PlayFab
                 statusText.text = message;
             }
             Debug.Log(message);
+        }
+
+        private void ApplyCachedUsername()
+        {
+            string cachedUsername = PlayFabManager.Instance.PlayerDisplayName;
+            if (string.IsNullOrWhiteSpace(cachedUsername))
+            {
+                cachedUsername = PlayerPrefs.GetString("USERNAME", string.Empty);
+            }
+
+            if (!string.IsNullOrWhiteSpace(cachedUsername))
+            {
+                ApplyUsername(cachedUsername, false);
+            }
+        }
+
+        private void ApplyUsername(string username, bool fetchShopData)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return;
+            }
+
+            currentUsername = username.Trim();
+
+            if (playerProfileNameText != null)
+            {
+                playerProfileNameText.text = currentUsername;
+            }
+
+            PlayFabManager.Instance.ApplyPlayerDisplayName(currentUsername);
+            PhotonNetwork.NickName = currentUsername;
+
+            if (!fetchShopData)
+            {
+                return;
+            }
+
+            ShopManager shopManager = GameObject.FindAnyObjectByType<ShopManager>();
+            if (shopManager != null)
+            {
+                StartCoroutine(shopManager.FetchPlayerData(currentUsername));
+            }
         }
     }
 }

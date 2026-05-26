@@ -1004,6 +1004,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   behaviorProfile: {fileID: 11400000, guid: 16b18643ceab9465cbb40b4ef1489f38, type: 2}
+  enableAdaptiveTuning: 1
+  personality: 5
   detectionRadius: 31.4
   targetLayer:
     serializedVersion: 2

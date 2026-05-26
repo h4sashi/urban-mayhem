@@ -33,7 +33,7 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
     private bool sortByKills = true;
 
     [SerializeField]
-    private int maxLeaderboardEntries = 10;
+    private int maxLeaderboardEntries = 5;
 
     [SerializeField]
     private bool debugMode = false;
@@ -127,32 +127,10 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
     private List<PlayerLeaderboardEntry> GetDisplayedEntries(List<PlayerLeaderboardEntry> rankedEntries)
     {
         List<PlayerLeaderboardEntry> displayedEntries = new List<PlayerLeaderboardEntry>();
+        int displayLimit = Mathf.Min(Mathf.Max(1, maxLeaderboardEntries), rankedEntries.Count);
 
-        int topCount = Mathf.Min(3, rankedEntries.Count);
-        int displayLimit = Mathf.Min(maxLeaderboardEntries, rankedEntries.Count);
-        int localPlayerIndex = rankedEntries.FindIndex(entry => entry.IsLocalPlayer);
-        bool pinLocalPlayer = localPlayerIndex >= topCount;
-
-        if (pinLocalPlayer)
+        for (int i = 0; i < displayLimit; i++)
         {
-            displayLimit = Mathf.Min(rankedEntries.Count, Mathf.Max(displayLimit, topCount + 1));
-        }
-
-        for (int i = 0; i < topCount && displayedEntries.Count < displayLimit; i++)
-        {
-            displayedEntries.Add(rankedEntries[i]);
-        }
-
-        if (pinLocalPlayer && displayedEntries.Count < displayLimit)
-        {
-            displayedEntries.Add(rankedEntries[localPlayerIndex]);
-        }
-
-        for (int i = topCount; i < rankedEntries.Count && displayedEntries.Count < displayLimit; i++)
-        {
-            if (pinLocalPlayer && i == localPlayerIndex)
-                continue;
-
             displayedEntries.Add(rankedEntries[i]);
         }
 
@@ -189,7 +167,7 @@ public class GameOverLeaderboardUI : MonoBehaviourPunCallbacks
                 new PlayerLeaderboardEntry
                 {
                     ActorNumber = aiPlayer.Key,
-                    Username = aiPlayer.Value + " [AI]",
+                    Username = aiPlayer.Value,
                     Kills = NetworkedScoreManager.Instance.GetAIKills(aiPlayer.Key),
                     Deaths = NetworkedScoreManager.Instance.GetAIDeaths(aiPlayer.Key),
                 }

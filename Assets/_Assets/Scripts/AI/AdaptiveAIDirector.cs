@@ -1,0 +1,266 @@
+using System.Collections.Generic;
+using Hanzo.Networking;
+using Photon.Pun;
+using UnityEngine;
+
+namespace Hanzo.AI
+{
+    public class AdaptiveAIDirector : MonoBehaviour
+    {
+        public static AdaptiveAIDirector Instance { get; private set; }
+
+        [Header("Adaptive Tuning")]
+        [SerializeField]
+        private float tuningInterval = 12f;
+
+        [SerializeField]
+        [Range(0f, 1f)]
+        private float maxDifficultyPressure = 0.85f;
+
+        [SerializeField]
+        private float recentDamageMemorySeconds = 10f;
+
+        [Header("Debug")]
+        [SerializeField]
+        private bool showDebugInfo = false;
+
+        private readonly List<AIPlayerController> aiControllers = new List<AIPlayerController>();
+        private float nextTuneTime;
+        private float lastMatchPressure;
+
+        public float LastMatchPressure => lastMatchPressure;
+
+        public static AdaptiveAIDirector EnsureExists()
+        {
+            if (Instance != null)
+                return Instance;
+
+            AdaptiveAIDirector existing = FindObjectOfType<AdaptiveAIDirector>();
+            if (existing != null)
+            {
+                Instance = existing;
+                return existing;
+            }
+
+            GameObject directorObject = new GameObject("Adaptive AI Director");
+            DontDestroyOnLoad(directorObject);
+            return directorObject.AddComponent<AdaptiveAIDirector>();
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+
+        private void Update()
+        {
+            if (Time.time < nextTuneTime)
+                return;
+
+            nextTuneTime = Time.time + Mathf.Max(1f, tuningInterval);
+            TuneAllAI();
+        }
+
+        public void RegisterAI(AIPlayerController ai)
+        {
+            if (ai == null || aiControllers.Contains(ai))
+                return;
+
+            aiControllers.Add(ai);
+            ai.ApplyAdaptiveTuning(BuildTuningFor(ai, CalculateMatchPressure()));
+        }
+
+        public void UnregisterAI(AIPlayerController ai)
+        {
+            if (ai == null)
+                return;
+
+            aiControllers.Remove(ai);
+        }
+
+        public float GetTargetPriority(AIPlayerController ai, Transform target, float distance)
+        {
+            if (ai == null || target == null)
+                return 0f;
+
+            float priority = 0f;
+
+            switch (ai.Personality)
+            {
+                case AIPersonality.Hunter:
+                    priority += GetHumanThreatScore(target) * 2.5f;
+                    break;
+                case AIPersonality.Brawler:
+                    priority += Mathf.Max(0f, 8f - distance) * 0.35f;
+                    break;
+                case AIPersonality.Trickster:
+                    if (ai.HasLaunchableDestructibleToward(target))
+                        priority += 3.5f;
+                    priority += Mathf.PingPong(Time.time * 0.35f, 1f);
+                    break;
+                case AIPersonality.Survivor:
+                    float closeDanger = Mathf.Clamp01(1f - distance / 8f);
+                    priority -= ai.LowHealthPressure * closeDanger * 6f;
+                    break;
+                case AIPersonality.Rival:
+                    if (ai.WasRecentlyDamagedBy(target, 30f))
+                        priority += 10f;
+                    break;
+            }
+
+            if (ai.CurrentTarget != null && ai.CurrentTarget.root == target.root)
+                priority += ai.TargetPersistence * 3f;
+
+            return priority;
+        }
+
+        private void TuneAllAI()
+        {
+            CleanupNullAI();
+            lastMatchPressure = CalculateMatchPressure();
+
+            for (int i = 0; i < aiControllers.Count; i++)
+            {
+                AIPlayerController ai = aiControllers[i];
+                if (ai == null)
+                    continue;
+
+                ai.ApplyAdaptiveTuning(BuildTuningFor(ai, lastMatchPressure));
+            }
+
+            if (showDebugInfo)
+            {
+                Debug.Log(
+                    $"[AdaptiveAI] Tuned {aiControllers.Count} AIs | pressure={lastMatchPressure:F2}"
+                );
+            }
+        }
+
+        private AIAdaptiveTuning BuildTuningFor(AIPlayerController ai, float matchPressure)
+        {
+            float recentDamagePressure =
+                ai != null ? ai.GetRecentDamagePressure(recentDamageMemorySeconds) : 0f;
+
+            float individualPressure = Mathf.Clamp(
+                matchPressure + recentDamagePressure * 0.25f,
+                -maxDifficultyPressure,
+                maxDifficultyPressure
+            );
+
+            return new AIAdaptiveTuning
+            {
+                matchPressure = individualPressure,
+                recentDamagePressure = recentDamagePressure,
+                lowHealthPressure = ai != null ? ai.LowHealthPressure : 0f,
+                activeAICount = Mathf.Max(1, aiControllers.Count),
+            };
+        }
+
+        private float CalculateMatchPressure()
+        {
+            NetworkedScoreManager scoreManager = NetworkedScoreManager.Instance;
+
+            float humanScore = 0f;
+            float humanDeaths = 0f;
+            float humanHitsTaken = 0f;
+            int humanCount = 0;
+
+            if (scoreManager != null && PhotonNetwork.CurrentRoom != null)
+            {
+                foreach (var player in PhotonNetwork.CurrentRoom.Players.Values)
+                {
+                    humanCount++;
+                    humanScore += scoreManager.GetPlayerScore(player.ActorNumber);
+                    humanDeaths += scoreManager.GetPlayerDeaths(player.ActorNumber);
+                    humanHitsTaken += scoreManager.GetPlayerHitsTaken(player.ActorNumber);
+                }
+            }
+
+            float aiScore = 0f;
+            float aiDeaths = 0f;
+            float aiHitsTaken = 0f;
+            int aiCount = 0;
+
+            for (int i = 0; i < aiControllers.Count; i++)
+            {
+                AIPlayerController ai = aiControllers[i];
+                if (ai == null)
+                    continue;
+
+                aiCount++;
+
+                if (scoreManager != null)
+                {
+                    int aiId = scoreManager.GetAIId(ai.gameObject);
+                    if (aiId != 0)
+                    {
+                        aiScore += scoreManager.GetAIScore(aiId);
+                        aiDeaths += scoreManager.GetAIDeaths(aiId);
+                        aiHitsTaken += scoreManager.GetAIHitsTaken(aiId);
+                        continue;
+                    }
+                }
+
+                aiDeaths += ai.DeathCount;
+                aiHitsTaken += ai.DamageEventsTaken;
+            }
+
+            if (humanCount == 0)
+            {
+                float localAIPressure = aiCount > 0 ? aiHitsTaken / Mathf.Max(1f, aiCount * 8f) : 0f;
+                return Mathf.Clamp(localAIPressure, -maxDifficultyPressure, maxDifficultyPressure);
+            }
+
+            float averageHumanScore = humanScore / Mathf.Max(1, humanCount);
+            float averageAIScore = aiScore / Mathf.Max(1, aiCount);
+            float averageHumanDeaths = humanDeaths / Mathf.Max(1, humanCount);
+            float averageAIDeaths = aiDeaths / Mathf.Max(1, aiCount);
+            float averageHumanHitsTaken = humanHitsTaken / Mathf.Max(1, humanCount);
+            float averageAIHitsTaken = aiHitsTaken / Mathf.Max(1, aiCount);
+
+            float scorePressure = (averageHumanScore - averageAIScore) / 40f;
+            float deathPressure = (averageAIDeaths - averageHumanDeaths) / 4f;
+            float hitPressure = (averageAIHitsTaken - averageHumanHitsTaken) / 8f;
+
+            return Mathf.Clamp(
+                scorePressure + deathPressure + hitPressure,
+                -maxDifficultyPressure,
+                maxDifficultyPressure
+            );
+        }
+
+        private float GetHumanThreatScore(Transform target)
+        {
+            if (target == null || target.GetComponentInParent<AIPlayerController>() != null)
+                return 0f;
+
+            NetworkedScoreManager scoreManager = NetworkedScoreManager.Instance;
+            PhotonView photonView = target.GetComponentInParent<PhotonView>();
+            if (scoreManager == null || photonView == null || photonView.Owner == null)
+                return 0f;
+
+            int actorNumber = photonView.Owner.ActorNumber;
+            float score = scoreManager.GetPlayerScore(actorNumber) / 20f;
+            float kills = scoreManager.GetPlayerKills(actorNumber) * 0.75f;
+            float deaths = scoreManager.GetPlayerDeaths(actorNumber) * 0.25f;
+
+            return Mathf.Clamp(score + kills - deaths, 0f, 8f);
+        }
+
+        private void CleanupNullAI()
+        {
+            for (int i = aiControllers.Count - 1; i >= 0; i--)
+            {
+                if (aiControllers[i] == null)
+                    aiControllers.RemoveAt(i);
+            }
+        }
+    }
+}

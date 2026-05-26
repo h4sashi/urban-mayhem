@@ -1,5 +1,6 @@
 using System.Collections;
 using Cinemachine;
+using Hanzo.AI;
 using Hanzo.Audio;
 using Hanzo.Core.Interfaces;
 using Hanzo.Networking;
@@ -521,6 +522,7 @@ namespace Hanzo.Player.Core
             {
                 ShowDamageOverlay();
                 StartCoroutine(DelayedPlayHurtSound(0.95f));
+                BroadcastDamageFeed(damageAmount, damageSource, damageType);
             }
 
             // ── Hit/score tracking ──────────────────────────────────────────────
@@ -606,11 +608,12 @@ namespace Hanzo.Player.Core
                     return;
 
                 scoreManager.AddAIKill(aiId);
+                KillFeedUI.BroadcastKill(ResolveAIName(aiId), ResolveKillFeedName(gameObject));
                 Debug.Log($"[PlayerHealth] AI kill credit → {damageSource.name}");
                 return;
             }
 
-            PhotonView sourceView = damageSource.GetComponent<PhotonView>();
+            PhotonView sourceView = damageSource.GetComponentInParent<PhotonView>();
             if (
                 sourceView != null
                 && sourceView.Owner != null
@@ -619,8 +622,63 @@ namespace Hanzo.Player.Core
             )
             {
                 scoreManager.AddPlayerKill(sourceView.Owner.ActorNumber);
+                KillFeedUI.BroadcastKill(
+                    ResolvePhotonPlayerName(sourceView),
+                    ResolveKillFeedName(gameObject)
+                );
                 Debug.Log($"[PlayerHealth] Kill credit → {sourceView.Owner.NickName}");
             }
+        }
+
+        private void BroadcastDamageFeed(
+            float damageAmount,
+            GameObject damageSource,
+            DamageType damageType
+        )
+        {
+            if (isOfflineMode)
+                return;
+
+            KillFeedUI.BroadcastDamage(
+                ResolveKillFeedName(damageSource),
+                ResolveKillFeedName(gameObject),
+                damageAmount,
+                damageType.ToString()
+            );
+        }
+
+        private string ResolveKillFeedName(GameObject target)
+        {
+            if (target == null)
+                return "Environment";
+
+            int aiId = scoreManager != null ? scoreManager.GetAIId(target) : 0;
+            if (aiId != 0)
+                return ResolveAIName(aiId);
+
+            PhotonView targetView = target.GetComponentInParent<PhotonView>();
+            if (targetView != null && targetView.Owner != null)
+                return ResolvePhotonPlayerName(targetView);
+
+            return target.name;
+        }
+
+        private string ResolveAIName(int aiId)
+        {
+            if (scoreManager != null)
+            {
+                string aiName = scoreManager.GetAIName(aiId);
+                if (!string.IsNullOrWhiteSpace(aiName))
+                    return aiName;
+            }
+
+            return AINameCatalog.GetNameForId(aiId);
+        }
+
+        private string ResolvePhotonPlayerName(PhotonView targetView)
+        {
+            string nickName = targetView?.Owner?.NickName;
+            return string.IsNullOrEmpty(nickName) ? "Player" : nickName;
         }
 
         // In PlayerHealthComponent — add this RPC

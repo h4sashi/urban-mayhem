@@ -1,4 +1,5 @@
 using System.Collections;
+using Hanzo.AI;
 using Photon.Pun;
 using UnityEngine;
 
@@ -124,23 +125,39 @@ namespace Hanzo.Networking.Utils
 
                 // Select a random AI prefab from available ones
                 string selectedPrefab = availablePrefabs[Random.Range(0, availablePrefabs.Length)];
+                int aiId = -(i + 1);
+                string aiDisplayName = AINameCatalog.GetNameForId(aiId);
+                object[] instantiationData = { aiId };
 
                 // Spawn AI using Photon
                 GameObject aiPlayer = PhotonNetwork.Instantiate(
                     selectedPrefab, // Use the correct prefab name
                     spawnPos,
                     Quaternion.identity,
-                    0
+                    0,
+                    instantiationData
                 );
 
                 if (aiPlayer != null)
                 {
-                    aiPlayer.name = $"AI_Player_{i + 1}";
+                    aiPlayer.name = aiDisplayName;
+
+                    Hanzo.AI.AIPlayerController aiController =
+                        aiPlayer.GetComponent<Hanzo.AI.AIPlayerController>();
+                    if (aiController != null)
+                        aiController.ConfigureIdentity(aiId, aiDisplayName);
+
+                    if (Hanzo.Networking.NetworkedScoreManager.Instance != null)
+                        Hanzo.Networking.NetworkedScoreManager.Instance.RegisterAIPlayer(
+                            aiId,
+                            aiDisplayName
+                        );
+
                     PhotonView pv = aiPlayer.GetComponent<PhotonView>();
                     if (pv != null)
                     {
                         Debug.Log(
-                            $"[AI Spawner] ✓ Spawned {selectedPrefab} as AI {i + 1}/{count} at {spawnPos}"
+                            $"[AI Spawner] ✓ Spawned {selectedPrefab} as {aiDisplayName} at {spawnPos} (slot {i + 1}/{count})"
                         );
                     }
 

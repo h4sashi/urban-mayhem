@@ -38,6 +38,7 @@ public class MatchmakingManager : MonoBehaviourPunCallbacks
     private float currentCountdown;
     private Coroutine countdownCoroutine;
     private bool hasStartedGame = false;
+    private bool startWithAIsPending = false;
 
     void Start()
     {
@@ -45,10 +46,21 @@ public class MatchmakingManager : MonoBehaviourPunCallbacks
         PhotonNetwork.AutomaticallySyncScene = true;
         PhotonNetwork.GameVersion = gameVersion;
 
-        // Set nickname from PlayerPrefs
+        // Set nickname from the profile that was loaded during login.
         if (string.IsNullOrEmpty(PhotonNetwork.NickName))
         {
-            PhotonNetwork.NickName = PlayFabManager.Instance.PlayerDisplayName ?? "Player" + Random.Range(1000, 9999);
+            string nickname = PlayFabManager.Instance != null
+                ? PlayFabManager.Instance.PlayerDisplayName
+                : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(nickname))
+            {
+                nickname = PlayerPrefs.GetString("USERNAME", string.Empty);
+            }
+
+            PhotonNetwork.NickName = string.IsNullOrWhiteSpace(nickname)
+                ? "Player" + Random.Range(1000, 9999)
+                : nickname.Trim();
         }
 
         // Load max players setting
@@ -189,51 +201,75 @@ public class MatchmakingManager : MonoBehaviourPunCallbacks
 
 void StartGameWithAIs()
 {
-    if (hasStartedGame) return;
+        if (hasStartedGame)
+            return;
 
-    hasStartedGame = true;
-    isMatchmaking  = false;
+        if (!PhotonNetwork.InRoom)
+        {
+            if (!PhotonNetwork.IsConnected)
+            {
+                Debug.LogError("[Matchmaking] Cannot start game with AIs: not connected to Photon.");
+                UpdateStatus("Disconnected: cannot start AI game.");
+                isMatchmaking = false;
+                return;
+            }
 
-    if (countdownCoroutine != null)
-    {
-        StopCoroutine(countdownCoroutine);
-        countdownCoroutine = null;
-    }
+            if (!startWithAIsPending)
+            {
+                startWithAIsPending = true;
+                UpdateStatus("Creating room for AI match...");
+                Debug.Log("[Matchmaking] Not in room yet. Creating room to start AI match.");
 
-    // Real players in the room right now
-    int currentPlayers = PhotonNetwork.InRoom
-        ? PhotonNetwork.CurrentRoom.PlayerCount
-        : 1;
+                RoomOptions roomOptions = new RoomOptions
+                {
+                    MaxPlayers = requiredPlayers,
+                    IsVisible = false,
+                    IsOpen = true,
+                };
 
-    // AIs needed = required slots minus real players already present
-    // requiredPlayers comes from the Inspector (e.g. 9)
-    // currentPlayers is whoever actually joined (e.g. 2)
-    // aisNeeded = 9 - 2 = 7  ← never more than the gap
-    int aisNeeded = Mathf.Max(0, requiredPlayers - currentPlayers);
+                string roomName = "Room_AI_" + Random.Range(1000, 9999);
+                PhotonNetwork.CreateRoom(roomName, roomOptions, TypedLobby.Default);
+            }
 
-    Debug.Log($"[Matchmaking] Required={requiredPlayers}, " +
-              $"RealPlayers={currentPlayers}, AIsNeeded={aisNeeded}");
+            return;
+        }
 
-    // Write ONLY what the Game scene needs — one authoritative source
-    PlayerPrefs.SetInt("SpawnAIPlayers",   aisNeeded > 0 ? 1 : 0);
-    PlayerPrefs.SetInt("NumberOfAIs",      aisNeeded);
-    PlayerPrefs.SetInt("RealPlayerCount",  currentPlayers);
-    PlayerPrefs.SetInt("RequiredPlayers",  requiredPlayers);
-    PlayerPrefs.SetString("AIPrefabName",  aiPrefabName);
-    PlayerPrefs.Save();
+        hasStartedGame = true;
+        isMatchmaking = false;
+        startWithAIsPending = false;
 
-    if (PhotonNetwork.InRoom)
-    {
+        if (countdownCoroutine != null)
+        {
+            StopCoroutine(countdownCoroutine);
+            countdownCoroutine = null;
+        }
+
+        int currentPlayers = PhotonNetwork.CurrentRoom.PlayerCount;
+        int aisNeeded = Mathf.Max(0, requiredPlayers - currentPlayers);
+
+        Debug.Log($"[Matchmaking] Required={requiredPlayers}, " +
+                  $"RealPlayers={currentPlayers}, AIsNeeded={aisNeeded}");
+
+        PlayerPrefs.SetInt("SpawnAIPlayers",   aisNeeded > 0 ? 1 : 0);
+        PlayerPrefs.SetInt("NumberOfAIs",      aisNeeded);
+        PlayerPrefs.SetInt("RealPlayerCount",  currentPlayers);
+        PlayerPrefs.SetInt("RequiredPlayers",  requiredPlayers);
+        PlayerPrefs.SetString("AIPrefabName",  aiPrefabName);
+        PlayerPrefs.Save();
+
         PhotonNetwork.CurrentRoom.IsOpen    = false;
         PhotonNetwork.CurrentRoom.IsVisible = false;
-    }
 
-    if (PhotonNetwork.IsMasterClient)
-    {
-        Debug.Log($"[Matchmaking] Loading {gameSceneName} — spawning {aisNeeded} AIs.");
-        PhotonNetwork.LoadLevel(gameSceneName);
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Debug.Log($"[Matchmaking] Loading {gameSceneName} — spawning {aisNeeded} AIs.");
+            PhotonNetwork.LoadLevel(gameSceneName);
+        }
+        else
+        {
+            Debug.Log("[Matchmaking] Waiting for MasterClient to load the scene.");
+        }
     }
-}
 
 
 
@@ -290,6 +326,11 @@ void StartGameWithAIs()
 
         // Check if we have enough players
         CheckIfCanStartGame();
+
+        if (startWithAIsPending && !hasStartedGame)
+        {
+            StartGameWithAIs();
+        }
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)

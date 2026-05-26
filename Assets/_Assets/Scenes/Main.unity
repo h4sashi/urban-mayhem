@@ -166,8 +166,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
@@ -6208,7 +6208,7 @@ MonoBehaviour:
   usernameCanvas: {fileID: 606533442}
   usernameInput: {fileID: 814652267}
   statusText: {fileID: 835764815}
-  playerProfileNameText: {fileID: 550115838}
+  playerProfileNameText: {fileID: 1566765835}
   currentUsername: 
   minUsernameLength: 3
   maxUsernameLength: 20
@@ -6590,10 +6590,10 @@ MonoBehaviour:
   playButton: {fileID: 232329301}
   countdownText: {fileID: 2139226796}
   statusText: {fileID: 0}
-  requiredPlayers: 13
-  aiSpawnTimeout: 35
+  requiredPlayers: 18
+  aiSpawnTimeout: 4
   gameSceneName: Game
-  numberOfAIsToSpawn: 13
+  numberOfAIsToSpawn: 18
   aiPrefabName: AIPlayer
   gameVersion: 1.0
 --- !u!4 &736503395
@@ -14667,30 +14667,6 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
---- !u!114 &1923895020
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1923895015}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4c3cdb6f361fe43e7bb92232820174e6, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  playIntroOnStart: 1
-  useUnscaledTime: 1
-  introStagger: 0.055
-  introDuration: 0.42
-  slideDistance: 44
-  buttonHoverScale: 1.06
-  buttonPressScale: 0.94
-  buttonSpeed: 14
-  idleBobDistance: 3.5
-  idleBobSpeed: 1.1
-  glowPulseStrength: 0.12
-  revealDuration: 0.28
 --- !u!114 &1923895017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -14759,6 +14735,30 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &1923895020
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1923895015}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4c3cdb6f361fe43e7bb92232820174e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playIntroOnStart: 1
+  useUnscaledTime: 1
+  introStagger: 0.055
+  introDuration: 0.42
+  slideDistance: 44
+  buttonHoverScale: 1.06
+  buttonPressScale: 0.94
+  buttonSpeed: 14
+  idleBobDistance: 3.5
+  idleBobSpeed: 1.1
+  glowPulseStrength: 0.12
+  revealDuration: 0.28
 --- !u!1 &1940243406
 GameObject:
   m_ObjectHideFlags: 0
