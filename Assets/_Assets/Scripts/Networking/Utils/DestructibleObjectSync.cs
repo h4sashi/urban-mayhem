@@ -138,9 +138,11 @@ namespace Hanzo.Networking.Utils
                 Destroy(gameObject);
             }
 
-            Debug.Log($"[Destructible] Object destroyed!");
+            if (showDebugInfo)
+                Debug.Log("[Destructible] Object destroyed!");
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!showDebugInfo) return;
@@ -176,6 +178,7 @@ namespace Hanzo.Networking.Utils
                 }
             }
         }
+#endif
 
     }
      

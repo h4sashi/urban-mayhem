@@ -36,6 +36,8 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
         // Basic safety: ensure Photon connected
         PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "us"; // or "eu", "asia", etc.
         PhotonNetwork.GameVersion = gameVersion;
+        PhotonNetwork.SendRate = 30;
+        PhotonNetwork.SerializationRate = 20;
 
         // Generate a random nickname if not set
         if (string.IsNullOrEmpty(PhotonNetwork.NickName))
@@ -80,6 +82,8 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
             MaxPlayers = maxPlayers, // Uses the value loaded from PlayerPrefs
             IsVisible = true,
             IsOpen = true,
+            PlayerTtl = PhotonReconnectRecovery.RoomPlayerTtlMilliseconds,
+            EmptyRoomTtl = PhotonReconnectRecovery.RoomEmptyTtlMilliseconds,
         };
 
         Debug.Log($"[CreateAndJoinRooms] Creating room '{roomName}' (maxPlayers={maxPlayers})");

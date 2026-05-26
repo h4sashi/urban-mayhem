@@ -66,10 +66,10 @@ namespace Hanzo.Player.Controllers
 
         [Header("Debug")]
         [SerializeField]
-        private bool showDebugGizmos = true;
+        private bool showDebugGizmos = false;
 
         [SerializeField]
-        private bool verboseLogging = true;
+        private bool verboseLogging = false;
 
         [Header("Destructible Launch Settings")]
         [SerializeField]
@@ -88,6 +88,11 @@ namespace Hanzo.Player.Controllers
         private float lastPlayerHitTime = 0f;
         private float lastDestructibleHitTime = 0f;
         private const float HIT_COOLDOWN = 0.2f;
+        private const int MaxDashCollisionResults = 32;
+        private const int MaxLaunchTargetResults = 32;
+        private readonly Collider[] playerHitBuffer = new Collider[MaxDashCollisionResults];
+        private readonly Collider[] destructibleHitBuffer = new Collider[MaxDashCollisionResults];
+        private readonly Collider[] launchTargetBuffer = new Collider[MaxLaunchTargetResults];
 
         // Debug info
         private int framesSinceDashActive = 0;
@@ -113,7 +118,7 @@ namespace Hanzo.Player.Controllers
                     $"[{name}] DashCollisionHandler: PlayerAbilityController NOT FOUND!"
                 );
             }
-            else if (playerMovementController.DashAbility == null)
+            else if (playerMovementController == null || playerMovementController.DashAbility == null)
             {
                 Debug.LogError($"[{name}] DashCollisionHandler: DashAbility is NULL!");
             }
@@ -127,17 +132,20 @@ namespace Hanzo.Player.Controllers
 
         private void DiagnoseLayerConfiguration()
         {
+            if (playerLayer == 0)
+            {
+                Debug.LogError($"[{name}] ⚠️ PlayerLayer is NOT SET! Collisions will not work!");
+                return;
+            }
+
+            if (!verboseLogging)
+                return;
+
             Debug.Log($"[{name}] ========== LAYER CONFIGURATION ==========");
             Debug.Log(
                 $"[{name}] This GameObject Layer: {gameObject.layer} ({LayerMask.LayerToName(gameObject.layer)})"
             );
             Debug.Log($"[{name}] Player Layer Mask Value: {playerLayer.value}");
-
-            if (playerLayer == 0)
-            {
-                Debug.LogError($"[{name}] ⚠️ PlayerLayer is NOT SET! Collisions will not work!");
-            }
-
             Debug.Log($"[{name}] ==========================================");
         }
 
@@ -197,18 +205,20 @@ namespace Hanzo.Player.Controllers
                 transform.position + transform.TransformDirection(detectionOffset);
             lastDetectionPos = detectionPos;
 
-            Collider[] hitColliders = Physics.OverlapSphere(
+            int hitCount = Physics.OverlapSphereNonAlloc(
                 detectionPos,
                 detectionRadius,
-                playerLayer
+                playerHitBuffer,
+                playerLayer,
+                QueryTriggerInteraction.UseGlobal
             );
 
             if (verboseLogging)
             {
-                if (hitColliders.Length > 0)
+                if (hitCount > 0)
                 {
                     // Debug.Log(
-                        // $"[{name}] 🎯 Player collision check: Found {hitColliders.Length} colliders"
+                    // $"[{name}] 🎯 Player collision check: Found {hitCount} colliders"
                     // );
                 }
                 else if (framesSinceDashActive % 10 == 0)
@@ -219,8 +229,12 @@ namespace Hanzo.Player.Controllers
                 }
             }
 
-            foreach (var hitCollider in hitColliders)
+            for (int i = 0; i < hitCount; i++)
             {
+                Collider hitCollider = playerHitBuffer[i];
+                if (hitCollider == null)
+                    continue;
+
                 if (verboseLogging)
                 {
                     Debug.Log(
@@ -278,19 +292,25 @@ namespace Hanzo.Player.Controllers
                 transform.position + transform.TransformDirection(detectionOffset);
             lastDetectionPos = detectionPos;
 
-            Collider[] hitColliders = Physics.OverlapSphere(
+            int hitCount = Physics.OverlapSphereNonAlloc(
                 detectionPos,
                 detectionRadius,
-                destructibleLayer
+                destructibleHitBuffer,
+                destructibleLayer,
+                QueryTriggerInteraction.UseGlobal
             );
 
-            if (verboseLogging && hitColliders.Length > 0)
+            if (verboseLogging && hitCount > 0)
             {
                 // Debug.Log($"[{name}] 📦 Destructible collision check: Found {hitColliders.Length} colliders");
             }
 
-            foreach (var hitCollider in hitColliders)
+            for (int i = 0; i < hitCount; i++)
             {
+                Collider hitCollider = destructibleHitBuffer[i];
+                if (hitCollider == null)
+                    continue;
+
                 Rigidbody targetRb = hitCollider.GetComponent<Rigidbody>();
                 if (targetRb == null)
                 {
@@ -332,9 +352,12 @@ namespace Hanzo.Player.Controllers
                 targetRb.velocity = Vector3.zero;
                 targetRb.AddForce(force, ForceMode.Impulse);
 
-                Debug.Log(
-                    $"[{name}] 💥 HIT DESTRUCTIBLE {hitCollider.name}! Force: {knockbackForce}"
-                );
+                if (verboseLogging)
+                {
+                    Debug.Log(
+                        $"[{name}] 💥 HIT DESTRUCTIBLE {hitCollider.name}! Force: {knockbackForce}"
+                    );
+                }
 
                 PhotonView targetPhotonView = hitCollider.GetComponentInParent<PhotonView>();
                 if (targetPhotonView != null)
@@ -370,17 +393,23 @@ namespace Hanzo.Player.Controllers
         /// </summary>
         private Vector3 GetAimedLaunchDirection(Vector3 impactPoint, Vector3 naturalKnockback)
         {
-            Collider[] candidates = Physics.OverlapSphere(
+            int candidateCount = Physics.OverlapSphereNonAlloc(
                 impactPoint,
                 launchTargetSearchRadius,
-                launchTargetLayer
+                launchTargetBuffer,
+                launchTargetLayer,
+                QueryTriggerInteraction.UseGlobal
             );
 
             float closestDist = Mathf.Infinity;
             Transform closestTarget = null;
 
-            foreach (var col in candidates)
+            for (int i = 0; i < candidateCount; i++)
             {
+                Collider col = launchTargetBuffer[i];
+                if (col == null)
+                    continue;
+
                 // Don't aim back at the dasher
                 if (col.transform.root == transform.root)
                     continue;
@@ -436,18 +465,24 @@ namespace Hanzo.Player.Controllers
                         photonView.ViewID,
                         (int)damageType
                     );
-                    Debug.Log(
-                        $"[{name}] Dealt {damageAmount} {damageType} damage to {targetMono.name} via RPC"
-                    );
+                    if (verboseLogging)
+                    {
+                        Debug.Log(
+                            $"[{name}] Dealt {damageAmount} {damageType} damage to {targetMono.name} via RPC"
+                        );
+                    }
                     return;
                 }
             }
 
             // Fallback for offline mode — call directly
             target.TakeDamage(damageAmount, gameObject, damageType);
-            Debug.Log(
-                $"[{name}] Dealt {damageAmount} {damageType} damage to {target} (offline fallback)"
-            );
+            if (verboseLogging)
+            {
+                Debug.Log(
+                    $"[{name}] Dealt {damageAmount} {damageType} damage to {target} (offline fallback)"
+                );
+            }
         }
 
         /// <summary>
@@ -596,6 +631,7 @@ namespace Hanzo.Player.Controllers
             }
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!verboseLogging || !photonView.IsMine)
@@ -618,5 +654,6 @@ namespace Hanzo.Player.Controllers
 
             GUILayout.EndArea();
         }
+#endif
     }
 }

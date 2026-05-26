@@ -15,6 +15,9 @@ namespace Hanzo.Player.Input
         [SerializeField] private bool useMobileControls = true;
         [SerializeField] private FloatingJoystick mobileJoystick;
         [SerializeField] private GameObject mobileControlsUI;
+
+        [Header("Debug")]
+        [SerializeField] private bool showDebugInfo = false;
         
         public PlayerInputActions inputActions;
         
@@ -75,11 +78,13 @@ namespace Hanzo.Player.Input
                 mobileJoystick.OnJoystickMove += OnMobileJoystickMove;
                 mobileJoystick.OnJoystickReleased += OnMobileJoystickReleased;
                 
-                Debug.Log("[LOCAL PLAYER] Mobile controls enabled");
+                if (showDebugInfo)
+                    Debug.Log("[LOCAL PLAYER] Mobile controls enabled");
             }
             else
             {
-                Debug.Log("[LOCAL PLAYER] Keyboard/Gamepad controls enabled");
+                if (showDebugInfo)
+                    Debug.Log("[LOCAL PLAYER] Keyboard/Gamepad controls enabled");
             }
         }
         
@@ -88,7 +93,8 @@ namespace Hanzo.Player.Input
             if (mobileControlsUI != null)
             {
                 mobileControlsUI.SetActive(false);
-                Debug.Log("[REMOTE PLAYER/AI] Mobile controls disabled");
+                if (showDebugInfo)
+                    Debug.Log("[REMOTE PLAYER/AI] Mobile controls disabled");
             }
             
             if (mobileJoystick != null)
@@ -187,6 +193,17 @@ namespace Hanzo.Player.Input
             
             OnSpeedBoostInput?.Invoke();
         }
+
+        public void ResetMovementInput(bool notifyListeners = false)
+        {
+            MoveInput = Vector2.zero;
+
+            if (mobileJoystick != null)
+                mobileJoystick.ResetInputImmediate();
+
+            if (notifyListeners)
+                OnMoveInput?.Invoke(MoveInput);
+        }
         
         // ============================================
         // PLAYER INPUT METHODS (PRIVATE)
@@ -234,7 +251,8 @@ namespace Hanzo.Player.Input
         {
             if (isAIControlled || photonView == null || !photonView.IsMine) return;
             
-            Debug.Log("Dash input received (Keyboard/Gamepad)");
+            if (showDebugInfo)
+                Debug.Log("Dash input received (Keyboard/Gamepad)");
             OnDashInput?.Invoke();
         }
         
@@ -242,7 +260,8 @@ namespace Hanzo.Player.Input
         {
             if (isAIControlled || photonView == null || !photonView.IsMine) return;
             
-            Debug.Log("Speed Boost input received (Keyboard/Gamepad)");
+            if (showDebugInfo)
+                Debug.Log("Speed Boost input received (Keyboard/Gamepad)");
             OnSpeedBoostInput?.Invoke();
         }
         
@@ -251,7 +270,8 @@ namespace Hanzo.Player.Input
         {
             if (isAIControlled || photonView == null || !photonView.IsMine) return;
             
-            Debug.Log("Dash Triggered (Mobile Button)");
+            if (showDebugInfo)
+                Debug.Log("Dash Triggered (Mobile Button)");
             OnDashInput?.Invoke();
         }
         
@@ -259,7 +279,8 @@ namespace Hanzo.Player.Input
         {
             if (isAIControlled || photonView == null || !photonView.IsMine) return;
             
-            Debug.Log("Speed Boost Triggered (Mobile Button)");
+            if (showDebugInfo)
+                Debug.Log("Speed Boost Triggered (Mobile Button)");
             OnSpeedBoostInput?.Invoke();
         }
         

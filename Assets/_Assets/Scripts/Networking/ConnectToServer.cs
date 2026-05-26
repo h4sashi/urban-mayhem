@@ -32,6 +32,8 @@ public class ConnectToServer : MonoBehaviourPunCallbacks
 
         // Set game version BEFORE connecting
         PhotonNetwork.GameVersion = "1.0"; // Must match CreateAndJoinRooms!
+        PhotonNetwork.SendRate = 30;
+        PhotonNetwork.SerializationRate = 20;
         PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "us";
         PhotonNetwork.ConnectUsingSettings();
         

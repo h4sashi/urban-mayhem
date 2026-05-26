@@ -25,6 +25,13 @@ namespace Hanzo.Player.Movement.States
         {
             moveInput = input;
         }
+
+        public void ClearMoveInput()
+        {
+            moveInput = Vector2.zero;
+            smoothedInput = Vector2.zero;
+            inputVelocity = Vector2.zero;
+        }
         
         /// <summary>
         /// Called by SpeedBoostAbility to modify movement speed in real-time
@@ -103,8 +110,7 @@ namespace Hanzo.Player.Movement.States
         public void Exit(IMovementController controller)
         {
             // Reset input smoothing
-            smoothedInput = Vector2.zero;
-            inputVelocity = Vector2.zero;
+            ClearMoveInput();
             
             // Reset speed multiplier on exit
             currentSpeedMultiplier = 1f;

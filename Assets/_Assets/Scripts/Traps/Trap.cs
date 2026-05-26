@@ -75,6 +75,9 @@ namespace Hanzo.Traps
         private static List<PlayerIndicatorData> cachedPlayers = new List<PlayerIndicatorData>();
         private static float lastPlayerCacheTime = -999f;
         private const float PLAYER_CACHE_REFRESH_INTERVAL = 2f; // Refresh every 2 seconds if needed
+        private const int EXPLOSION_OVERLAP_BUFFER_SIZE = 64;
+        private readonly Collider[] explosionOverlapBuffer =
+            new Collider[EXPLOSION_OVERLAP_BUFFER_SIZE];
 
         private class PlayerIndicatorData
         {
@@ -559,14 +562,20 @@ private void ExecuteDetonate()
 
         void ApplyExplosionForce()
         {
-            Collider[] colliders = Physics.OverlapSphere(
+            int colliderCount = Physics.OverlapSphereNonAlloc(
                 transform.position,
                 blastRadius,
-                affectedLayers
+                explosionOverlapBuffer,
+                affectedLayers,
+                QueryTriggerInteraction.UseGlobal
             );
 
-            foreach (Collider col in colliders)
+            for (int i = 0; i < colliderCount; i++)
             {
+                Collider col = explosionOverlapBuffer[i];
+                if (col == null)
+                    continue;
+
                 if (col.gameObject == gameObject)
                     continue;
 

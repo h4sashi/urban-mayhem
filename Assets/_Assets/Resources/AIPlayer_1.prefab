@@ -1028,17 +1028,17 @@ MonoBehaviour:
     SynchronizeEnabled: 1
     TeleportEnabled: 1
     TeleportIfDistanceGreaterThan: 3
-    InterpolateOption: 2
+    InterpolateOption: 3
     InterpolateMoveTowardsSpeed: 1
     InterpolateLerpSpeed: 1
-    ExtrapolateOption: 0
+    ExtrapolateOption: 1
     ExtrapolateSpeed: 1
     ExtrapolateIncludingRoundTripTime: 1
     ExtrapolateNumberOfStoredPositions: 1
   m_RotationModel:
     SynchronizeEnabled: 1
     InterpolateOption: 1
-    InterpolateRotateTowardsSpeed: 180
+    InterpolateRotateTowardsSpeed: 720
     InterpolateLerpSpeed: 5
   m_ScaleModel:
     SynchronizeEnabled: 0
@@ -1108,7 +1108,7 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 1
   m_IsKinematic: 0
-  m_Interpolate: 0
+  m_Interpolate: 1
   m_Constraints: 112
   m_CollisionDetection: 2
 --- !u!114 &8002000197910860077
@@ -1161,8 +1161,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   behaviorProfile: {fileID: 11400000, guid: 16b18643ceab9465cbb40b4ef1489f38, type: 2}
+  utilityProfile: {fileID: 11400000, guid: 367688ad5aa144952b3b33cbf11f1edb, type: 2}
   enableAdaptiveTuning: 1
-  personality: 1
+  personality: 0
   detectionRadius: 31.4
   targetLayer:
     serializedVersion: 2

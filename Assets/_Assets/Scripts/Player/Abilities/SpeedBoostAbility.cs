@@ -264,6 +264,14 @@ namespace Hanzo.Player.Abilities
             
             Debug.Log($"Speed Boost ended. Cooldown: {cooldownTimer}s");
         }
+
+        public void Cancel()
+        {
+            if (!isActive)
+                return;
+
+            EndSpeedBoost();
+        }
         
         public void Cleanup()
         {

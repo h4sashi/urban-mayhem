@@ -52,9 +52,11 @@ namespace Hanzo.Player.Controllers
         private Rigidbody rb;
         private Animator animator;
         private PhotonView photonView;
+        private PhotonTransformViewClassic transformSync;
         private PlayerInputHandler inputHandler;
         private PlayerStateController stateController;
         private Camera mainCamera;
+        private Quaternion lastNetworkRotation;
 
         // States
         private MovingState movingState;
@@ -67,6 +69,7 @@ namespace Hanzo.Player.Controllers
         private DashAbility dashAbility;
         public DashAbility DashAbility => dashAbility;
         private SpeedBoostAbility speedBoostAbility;
+        public SpeedBoostAbility SpeedBoostAbility => speedBoostAbility;
 
         // Camera-relative input
         private Vector2 rawInput;
@@ -87,8 +90,16 @@ namespace Hanzo.Player.Controllers
             rb = GetComponent<Rigidbody>();
             animator = GetComponentInChildren<Animator>(true);
             photonView = GetComponent<PhotonView>();
+            transformSync = GetComponent<PhotonTransformViewClassic>();
             inputHandler = GetComponent<PlayerInputHandler>();
             stateController = GetComponent<PlayerStateController>();
+            lastNetworkRotation = transform.rotation;
+
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            if (rb.collisionDetectionMode == CollisionDetectionMode.Discrete)
+            {
+                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            }
 
             if (virtualCamera == null)
             {
@@ -107,7 +118,6 @@ namespace Hanzo.Player.Controllers
 
             InitializeStates();
             InitializeAbilities();
-            SubscribeToInput();
         }
 
         private void Start()
@@ -144,10 +154,6 @@ namespace Hanzo.Player.Controllers
                 ProcessCameraRelativeInput();
             }
 
-            // Update abilities
-            dashAbility?.Update();
-            speedBoostAbility?.Update();
-
             // Check for falling state changes
             if (Time.time - lastFallCheck > fallCheckInterval)
             {
@@ -155,12 +161,37 @@ namespace Hanzo.Player.Controllers
                 CheckForFalling();
             }
 
-            // CRITICAL FIX: Always update current state
-            // Remove the condition that prevented updates during falling
-            currentState?.Update(this);
-
             // Check for state transitions
             CheckStateTransitions();
+        }
+
+        private void FixedUpdate()
+        {
+            if (!photonView.IsMine)
+                return;
+
+            if (stateController != null && stateController.IsStunned)
+            {
+                UpdateNetworkMovementSync();
+                return;
+            }
+
+            dashAbility?.Update();
+            speedBoostAbility?.Update();
+            currentState?.Update(this);
+            UpdateNetworkMovementSync();
+        }
+
+        private void UpdateNetworkMovementSync()
+        {
+            if (transformSync == null)
+                return;
+
+            float turnSpeed = Quaternion.Angle(lastNetworkRotation, transform.rotation)
+                / Mathf.Max(Time.fixedDeltaTime, Mathf.Epsilon);
+
+            transformSync.SetSynchronizedValues(rb.velocity, turnSpeed);
+            lastNetworkRotation = transform.rotation;
         }
 
         /// <summary>
@@ -305,11 +336,12 @@ namespace Hanzo.Player.Controllers
 
         private void OnEnable()
         {
-            if (inputHandler != null)
+            SubscribeToInput();
+
+            if (stateController != null)
             {
-                inputHandler.OnMoveInput += HandleMoveInput;
-                inputHandler.OnDashInput += HandleDashInput;
-                inputHandler.OnSpeedBoostInput += HandleSpeedBoostInput;
+                stateController.OnStunStarted += HandleStunStarted;
+                stateController.OnStunEnded += HandleStunEnded;
             }
         }
 
@@ -320,6 +352,12 @@ namespace Hanzo.Player.Controllers
                 inputHandler.OnMoveInput -= HandleMoveInput;
                 inputHandler.OnDashInput -= HandleDashInput;
                 inputHandler.OnSpeedBoostInput -= HandleSpeedBoostInput;
+            }
+
+            if (stateController != null)
+            {
+                stateController.OnStunStarted -= HandleStunStarted;
+                stateController.OnStunEnded -= HandleStunEnded;
             }
         }
 
@@ -362,8 +400,12 @@ namespace Hanzo.Player.Controllers
         {
             if (!photonView.IsMine)
                 return;
+
             if (stateController != null && stateController.IsStunned)
+            {
+                ClearMovementInput();
                 return;
+            }
 
             rawInput = input;
 
@@ -371,6 +413,42 @@ namespace Hanzo.Player.Controllers
             {
                 movingState?.SetMoveInput(input);
             }
+        }
+
+        private void HandleStunStarted()
+        {
+            dashAbility?.Cancel();
+            speedBoostAbility?.Cancel();
+            ClearMovementInput();
+
+            if (animator != null)
+                animator.SetBool("RUN", false);
+        }
+
+        private void HandleStunEnded()
+        {
+            StopHorizontalMotion();
+            ClearMovementInput();
+
+            if (!(currentState is IdleState))
+                ChangeState(idleState);
+        }
+
+        private void ClearMovementInput()
+        {
+            inputHandler?.ResetMovementInput();
+            rawInput = Vector2.zero;
+            cameraRelativeInput = Vector3.zero;
+            movingState?.ClearMoveInput();
+        }
+
+        private void StopHorizontalMotion()
+        {
+            if (rb == null)
+                return;
+
+            rb.velocity = new Vector3(0f, rb.velocity.y, 0f);
+            rb.angularVelocity = Vector3.zero;
         }
 
         private void HandleDashInput()
@@ -468,6 +546,7 @@ namespace Hanzo.Player.Controllers
             useCameraRelativeMovement = enabled;
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!showDebugInfo || !photonView.IsMine)
@@ -509,6 +588,7 @@ namespace Hanzo.Player.Controllers
 
             GUILayout.EndArea();
         }
+#endif
 
         private void OnDestroy()
         {

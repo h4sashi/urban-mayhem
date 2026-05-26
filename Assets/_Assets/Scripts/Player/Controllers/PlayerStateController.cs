@@ -146,9 +146,12 @@ namespace Hanzo.Player.Controllers
             audioSource.maxDistance = audioMaxDistance;
             audioSource.dopplerLevel = 0f; // Disable doppler for gameplay sounds
 
-            Debug.Log(
-                $"[{name}] AudioSource configured: Min={audioMinDistance}m, Max={audioMaxDistance}m, Rolloff={audioRolloffMode}"
-            );
+            if (showDebugInfo)
+            {
+                Debug.Log(
+                    $"[{name}] AudioSource configured: Min={audioMinDistance}m, Max={audioMaxDistance}m, Rolloff={audioRolloffMode}"
+                );
+            }
 
             // Check if we're in offline mode
             CheckOfflineMode();
@@ -183,7 +186,8 @@ namespace Hanzo.Player.Controllers
                 if (isOfflineMode)
                 {
                     isLocalPlayer = true;
-                    Debug.Log("[PlayerState] Running in OFFLINE mode");
+                    if (showDebugInfo)
+                        Debug.Log("[PlayerState] Running in OFFLINE mode");
                 }
                 else
                 {
@@ -195,7 +199,8 @@ namespace Hanzo.Player.Controllers
                 // If any Photon error occurs, assume offline mode
                 isOfflineMode = true;
                 isLocalPlayer = true;
-                Debug.Log("[PlayerState] Photon unavailable, running OFFLINE");
+                if (showDebugInfo)
+                    Debug.Log("[PlayerState] Photon unavailable, running OFFLINE");
             }
         }
 
@@ -281,7 +286,8 @@ namespace Hanzo.Player.Controllers
                 }
             }
 
-            Debug.Log($"[PlayerState] Force ground check: Grounded={isGrounded}");
+            if (showDebugInfo)
+                Debug.Log($"[PlayerState] Force ground check: Grounded={isGrounded}");
         }
 
         private void CheckForFalling()
@@ -333,7 +339,8 @@ namespace Hanzo.Player.Controllers
             }
 
             OnFallStarted?.Invoke();
-            Debug.Log($"[Falling] Started at height: {fallStartHeight:F2}m, Drag: {rb.drag}");
+            if (showDebugInfo)
+                Debug.Log($"[Falling] Started at height: {fallStartHeight:F2}m, Drag: {rb.drag}");
 
             if (!isOfflineMode && photonView != null)
             {
@@ -363,12 +370,14 @@ namespace Hanzo.Player.Controllers
                 rb.drag = movementSettings != null ? movementSettings.GroundDrag : 6f;
             }
 
-            Debug.Log($"[Falling] Landed! Distance: {fallDistance:F2}m, Drag: {rb.drag}");
+            if (showDebugInfo)
+                Debug.Log($"[Falling] Landed! Distance: {fallDistance:F2}m, Drag: {rb.drag}");
 
             if (enableFallDamage && fallDistance > fallDamageThreshold)
             {
                 float damage = (fallDistance - fallDamageThreshold) * fallDamageMultiplier;
-                Debug.Log($"[Fall Damage] {damage:F1} from {fallDistance:F2}m");
+                if (showDebugInfo)
+                    Debug.Log($"[Fall Damage] {damage:F1} from {fallDistance:F2}m");
             }
 
             OnLanded?.Invoke(fallDistance);
@@ -392,9 +401,12 @@ namespace Hanzo.Player.Controllers
             if (!IsLocalPlayer())
                 return;
 
-            Debug.Log(
-                $"[LOCAL] ApplyKnockbackAndStun - Dir: {knockbackDirection}, Force: {knockbackForce}"
-            );
+            if (showDebugInfo)
+            {
+                Debug.Log(
+                    $"[LOCAL] ApplyKnockbackAndStun - Dir: {knockbackDirection}, Force: {knockbackForce}"
+                );
+            }
 
             if (isFalling)
             {
@@ -649,6 +661,7 @@ namespace Hanzo.Player.Controllers
                 vfxController.RemoveStunTint();
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!showDebugInfo || !IsLocalPlayer())
@@ -670,6 +683,7 @@ namespace Hanzo.Player.Controllers
             }
             GUILayout.EndArea();
         }
+#endif
 
         private void OnDrawGizmos()
         {

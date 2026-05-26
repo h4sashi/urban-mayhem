@@ -45,9 +45,10 @@ namespace Hanzo.Player.Controllers
             if (dashVFX != null)
             {
                 dashAbility.SetVFXController(dashVFX);
-                Debug.Log("PlayerAbilityController: DashVFXController injected successfully.");
+                if (showDebugInfo)
+                    Debug.Log("PlayerAbilityController: DashVFXController injected successfully.");
             }
-            else
+            else if (showDebugInfo)
             {
                 Debug.LogWarning("PlayerAbilityController: No DashVFXController found. VFX won't play.");
             }
@@ -185,6 +186,7 @@ namespace Hanzo.Player.Controllers
             }
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!showDebugInfo || !photonView.IsMine) return;
@@ -208,5 +210,6 @@ namespace Hanzo.Player.Controllers
             
             GUILayout.EndArea();
         }
+#endif
     }
 }

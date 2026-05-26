@@ -175,6 +175,26 @@ namespace Hanzo.UI
             OnJoystickReleased?.Invoke();
         }
 
+        public void ResetInputImmediate(bool notifyReleased = false)
+        {
+            if (joystickHandle != null)
+                joystickHandle.anchoredPosition = Vector2.zero;
+
+            inputVector = Vector2.zero;
+            isActive = false;
+
+            StopAllCoroutines();
+
+            if (canvasGroup != null)
+                canvasGroup.alpha = fadeWhenNotUsed ? 0f : inactiveAlpha;
+
+            if (joystickContainer != null && fadeWhenNotUsed)
+                joystickContainer.gameObject.SetActive(false);
+
+            if (notifyReleased)
+                OnJoystickReleased?.Invoke();
+        }
+
         private System.Collections.IEnumerator FadeJoystick(float targetAlpha, Action onComplete = null)
         {
             float startAlpha = canvasGroup.alpha;

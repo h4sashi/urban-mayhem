@@ -45,6 +45,8 @@ public class MatchmakingManager : MonoBehaviourPunCallbacks
         // Setup Photon
         PhotonNetwork.AutomaticallySyncScene = true;
         PhotonNetwork.GameVersion = gameVersion;
+        PhotonNetwork.SendRate = 30;
+        PhotonNetwork.SerializationRate = 20;
 
         // Set nickname from the profile that was loaded during login.
         if (string.IsNullOrEmpty(PhotonNetwork.NickName))
@@ -225,6 +227,8 @@ void StartGameWithAIs()
                     MaxPlayers = requiredPlayers,
                     IsVisible = false,
                     IsOpen = true,
+                    PlayerTtl = PhotonReconnectRecovery.RoomPlayerTtlMilliseconds,
+                    EmptyRoomTtl = PhotonReconnectRecovery.RoomEmptyTtlMilliseconds,
                 };
 
                 string roomName = "Room_AI_" + Random.Range(1000, 9999);
@@ -311,6 +315,8 @@ void StartGameWithAIs()
             MaxPlayers = requiredPlayers,
             IsVisible = true,
             IsOpen = true,
+            PlayerTtl = PhotonReconnectRecovery.RoomPlayerTtlMilliseconds,
+            EmptyRoomTtl = PhotonReconnectRecovery.RoomEmptyTtlMilliseconds,
         };
 
         // Create room with random name

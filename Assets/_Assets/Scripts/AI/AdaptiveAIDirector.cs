@@ -87,6 +87,19 @@ namespace Hanzo.AI
 
         public float GetTargetPriority(AIPlayerController ai, Transform target, float distance)
         {
+            bool hasLaunchableDestructible =
+                ai != null && target != null && ai.HasLaunchableDestructibleToward(target);
+
+            return GetTargetPriority(ai, target, distance, hasLaunchableDestructible);
+        }
+
+        public float GetTargetPriority(
+            AIPlayerController ai,
+            Transform target,
+            float distance,
+            bool hasLaunchableDestructible
+        )
+        {
             if (ai == null || target == null)
                 return 0f;
 
@@ -95,23 +108,25 @@ namespace Hanzo.AI
             switch (ai.Personality)
             {
                 case AIPersonality.Hunter:
-                    priority += GetHumanThreatScore(target) * 2.5f;
+                    priority += GetHumanThreatScore(target) * 4f;
                     break;
                 case AIPersonality.Brawler:
-                    priority += Mathf.Max(0f, 8f - distance) * 0.35f;
+                    priority += Mathf.Max(0f, 9f - distance) * 0.6f;
                     break;
                 case AIPersonality.Trickster:
-                    if (ai.HasLaunchableDestructibleToward(target))
-                        priority += 3.5f;
-                    priority += Mathf.PingPong(Time.time * 0.35f, 1f);
+                    if (hasLaunchableDestructible)
+                        priority += 6f;
+                    priority += Mathf.PingPong(Time.time * 0.45f, 1.5f);
                     break;
                 case AIPersonality.Survivor:
                     float closeDanger = Mathf.Clamp01(1f - distance / 8f);
-                    priority -= ai.LowHealthPressure * closeDanger * 6f;
+                    priority -= ai.LowHealthPressure * closeDanger * 10f;
+                    priority -= closeDanger * 1.5f;
                     break;
                 case AIPersonality.Rival:
                     if (ai.WasRecentlyDamagedBy(target, 30f))
-                        priority += 10f;
+                        priority += 14f;
+                    priority += GetHumanThreatScore(target) * 1.5f;
                     break;
             }
 

@@ -32,6 +32,7 @@ namespace Hanzo.Player.Core
 
         [Header("Health UI Settings")]
         public Image healthUIFill;
+        public TextMeshProUGUI healthText;
         public float healthBarSmoothSpeed = 5f; // Speed for smooth health bar transitions
         public Color healthBarHighColor = Color.green; // Color when health is high (75-100%)
         public Color healthBarMidColor = Color.yellow; // Color when health is medium (25-75%)
@@ -57,7 +58,7 @@ namespace Hanzo.Player.Core
 
         [Header("Debug")]
         [SerializeField]
-        private bool showDebugInfo = true;
+        private bool showDebugInfo = false;
 
         // Events
         public event System.Action<float, GameObject, DamageType> OnDamageTaken;
@@ -104,9 +105,10 @@ namespace Hanzo.Player.Core
                 transparent.a = 0f;
                 damageOverlay.color = transparent;
                 damageOverlay.enabled = true;
-                Debug.Log("[PlayerHealth] Damage overlay initialized (transparent)");
+                if (showDebugInfo)
+                    Debug.Log("[PlayerHealth] Damage overlay initialized (transparent)");
             }
-            else
+            else if (showDebugInfo)
             {
                 Debug.LogWarning("[PlayerHealth] ⚠️ Damage overlay Image not assigned!");
             }
@@ -120,7 +122,7 @@ namespace Hanzo.Player.Core
             if (playerVirtualCamera == null && IsLocalPlayer())
             {
                 playerVirtualCamera = GetComponentInChildren<CinemachineVirtualCamera>();
-                if (playerVirtualCamera == null)
+                if (playerVirtualCamera == null && showDebugInfo)
                     Debug.LogWarning("[PlayerHealth] No CinemachineVirtualCamera found!");
             }
         }
@@ -130,6 +132,8 @@ namespace Hanzo.Player.Core
         /// </summary>
         private void InitializeHealthUI()
         {
+            CacheHealthTextReference();
+
             if (healthUIFill != null)
             {
                 healthUIFill.fillAmount = 1f;
@@ -141,11 +145,40 @@ namespace Hanzo.Player.Core
                     healthUIFill.color = healthBarHighColor;
                 }
 
-                Debug.Log("[PlayerHealth] Health UI initialized");
+                if (showDebugInfo)
+                    Debug.Log("[PlayerHealth] Health UI initialized");
             }
-            else
+            else if (showDebugInfo)
             {
                 Debug.LogWarning("[PlayerHealth] ⚠️ Health UI Fill Image not assigned!");
+            }
+
+            UpdateHealthText();
+        }
+
+        private void CacheHealthTextReference()
+        {
+            if (healthText != null)
+            {
+                return;
+            }
+
+            TextMeshProUGUI[] textComponents = GetComponentsInChildren<TextMeshProUGUI>(true);
+            for (int i = 0; i < textComponents.Length; i++)
+            {
+                TextMeshProUGUI textComponent = textComponents[i];
+                if (
+                    textComponent != null
+                    && string.Equals(
+                        textComponent.name,
+                        "healthText",
+                        System.StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    healthText = textComponent;
+                    return;
+                }
             }
         }
 
@@ -157,7 +190,7 @@ namespace Hanzo.Player.Core
             if (!isOfflineMode)
             {
                 scoreManager = NetworkedScoreManager.Instance;
-                if (scoreManager == null)
+                if (scoreManager == null && showDebugInfo)
                     Debug.LogWarning(
                         "[PlayerHealth] NetworkedScoreManager not found (OK if offline)"
                     );
@@ -189,11 +222,14 @@ namespace Hanzo.Player.Core
                 audioManager.audioSource.minDistance = audioManager.audioMinDistance;
                 audioManager.audioSource.maxDistance = audioManager.audioMaxDistance;
                 audioManager.audioSource.dopplerLevel = 0f;
-                Debug.Log(
-                    $"[PlayerHealth] AudioSource configured: Min={audioManager.audioMinDistance}m, Max={audioManager.audioMaxDistance}m, Rolloff={audioManager.audioRolloffMode}"
-                );
+                if (showDebugInfo)
+                {
+                    Debug.Log(
+                        $"[PlayerHealth] AudioSource configured: Min={audioManager.audioMinDistance}m, Max={audioManager.audioMaxDistance}m, Rolloff={audioManager.audioRolloffMode}"
+                    );
+                }
             }
-            else
+            else if (showDebugInfo)
             {
                 Debug.LogWarning("[PlayerHealth] AudioSource not found!");
             }
@@ -219,7 +255,7 @@ namespace Hanzo.Player.Core
                 playerName = "Player (Offline)";
             }
 
-            if (isOfflineMode)
+            if (isOfflineMode && showDebugInfo)
                 Debug.Log("[PlayerHealth] Running in OFFLINE mode");
         }
 
@@ -310,9 +346,12 @@ namespace Hanzo.Player.Core
             float maxAlpha = damageColor.a;
             damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, maxAlpha);
 
-            Debug.Log(
-                $"[PlayerHealth] 🩸 Damage overlay flashed (alpha: {maxAlpha}) for local player"
-            );
+            if (showDebugInfo)
+            {
+                Debug.Log(
+                    $"[PlayerHealth] 🩸 Damage overlay flashed (alpha: {maxAlpha}) for local player"
+                );
+            }
 
             // Small delay at full intensity for impact
             yield return new WaitForSeconds(0.1f);
@@ -329,7 +368,8 @@ namespace Hanzo.Player.Core
 
             // Ensure fully transparent at end
             damageOverlay.color = new Color(damageColor.r, damageColor.g, damageColor.b, 0f);
-            Debug.Log("[PlayerHealth] Damage overlay faded out");
+            if (showDebugInfo)
+                Debug.Log("[PlayerHealth] Damage overlay faded out");
         }
 
         /// <summary>
@@ -337,7 +377,12 @@ namespace Hanzo.Player.Core
         /// </summary>
         private void UpdateHealthUI()
         {
-            if (healthUIFill == null || !IsLocalPlayer())
+            if (!IsLocalPlayer())
+                return;
+
+            UpdateHealthText();
+
+            if (healthUIFill == null)
                 return;
 
             // Calculate target fill amount
@@ -421,6 +466,31 @@ namespace Hanzo.Player.Core
             }
         }
 
+        private void UpdateHealthText()
+        {
+            CacheHealthTextReference();
+
+            if (healthText == null)
+            {
+                return;
+            }
+
+            healthText.text = $"{FormatHealthValue(currentHealth)}/{FormatHealthValue(maxHealth)}";
+        }
+
+        private static string FormatHealthValue(float healthValue)
+        {
+            float clampedValue = Mathf.Max(0f, healthValue);
+            float roundedValue = Mathf.Round(clampedValue);
+
+            if (Mathf.Abs(clampedValue - roundedValue) < 0.01f)
+            {
+                return Mathf.RoundToInt(roundedValue).ToString();
+            }
+
+            return clampedValue.ToString("0.#");
+        }
+
         /// <summary>
         /// Plays hurt sound effect locally and syncs to network
         /// </summary>
@@ -429,7 +499,8 @@ namespace Hanzo.Player.Core
             if (audioManager.audioClip != null && audioManager.audioSource != null)
             {
                 audioManager.audioSource.PlayOneShot(audioManager.audioClip, 0.8f);
-                Debug.Log($"[PlayerHealth] 🔊 Playing hurt SFX (Local)");
+                if (showDebugInfo)
+                    Debug.Log($"[PlayerHealth] 🔊 Playing hurt SFX (Local)");
             }
 
             // Sync sound to other players
@@ -456,7 +527,8 @@ namespace Hanzo.Player.Core
             if (audioManager.audioClip != null && audioManager.audioSource != null)
             {
                 audioManager.audioSource.PlayOneShot(audioManager.audioClip, 0.8f);
-                Debug.Log($"[PlayerHealth] 🔊 Playing hurt SFX (Remote)");
+                if (showDebugInfo)
+                    Debug.Log($"[PlayerHealth] 🔊 Playing hurt SFX (Remote)");
             }
         }
 
@@ -493,11 +565,14 @@ namespace Hanzo.Player.Core
                     // This source arrived late — it still deals damage but does NOT
                     // get kill credit, and the kill is attributed to the first source.
                     isSimultaneous = true;
-                    Debug.Log(
-                        $"[PlayerHealth] ⚡ Simultaneous lethal hit detected! "
-                            + $"First attacker: {lastLethalHitSource.name}, "
-                            + $"Late attacker: {damageSource.name} — kill goes to first attacker."
-                    );
+                    if (showDebugInfo)
+                    {
+                        Debug.Log(
+                            $"[PlayerHealth] ⚡ Simultaneous lethal hit detected! "
+                                + $"First attacker: {lastLethalHitSource.name}, "
+                                + $"Late attacker: {damageSource.name} — kill goes to first attacker."
+                        );
+                    }
                 }
                 else
                 {
@@ -511,10 +586,13 @@ namespace Hanzo.Player.Core
             currentHealth -= damageAmount;
             currentHealth = Mathf.Max(0, currentHealth);
 
-            Debug.Log(
-                $"[PlayerHealth] {GetPlayerName()} took {damageAmount} {damageType} "
-                    + $"from {damageSource?.name ?? "unknown"}. HP: {currentHealth}/{maxHealth}"
-            );
+            if (showDebugInfo)
+            {
+                Debug.Log(
+                    $"[PlayerHealth] {GetPlayerName()} took {damageAmount} {damageType} "
+                        + $"from {damageSource?.name ?? "unknown"}. HP: {currentHealth}/{maxHealth}"
+                );
+            }
 
             UpdateHealthUI();
 
@@ -591,7 +669,8 @@ namespace Hanzo.Player.Core
             if (shouldDie)
             {
                 AwardKillCredit(damageSource, isSimultaneous);
-                Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} — triggering stun-death.");
+                if (showDebugInfo)
+                    Debug.Log($"[PlayerHealth] ☠️ {GetPlayerName()} — triggering stun-death.");
                 DieWithKnockback(damageSource, damageType);
             }
         }
@@ -609,7 +688,8 @@ namespace Hanzo.Player.Core
 
                 scoreManager.AddAIKill(aiId);
                 KillFeedUI.BroadcastKill(ResolveAIName(aiId), ResolveKillFeedName(gameObject));
-                Debug.Log($"[PlayerHealth] AI kill credit → {damageSource.name}");
+                if (showDebugInfo)
+                    Debug.Log($"[PlayerHealth] AI kill credit → {damageSource.name}");
                 return;
             }
 
@@ -626,7 +706,8 @@ namespace Hanzo.Player.Core
                     ResolvePhotonPlayerName(sourceView),
                     ResolveKillFeedName(gameObject)
                 );
-                Debug.Log($"[PlayerHealth] Kill credit → {sourceView.Owner.NickName}");
+                if (showDebugInfo)
+                    Debug.Log($"[PlayerHealth] Kill credit → {sourceView.Owner.NickName}");
             }
         }
 
@@ -807,7 +888,8 @@ namespace Hanzo.Player.Core
                 return;
             isDead = true;
 
-            Debug.Log($"[PlayerHealth] 💀 {GetPlayerName()} has died!");
+            if (showDebugInfo)
+                Debug.Log($"[PlayerHealth] 💀 {GetPlayerName()} has died!");
 
             // Increment death counter
             if (isOfflineMode)
@@ -929,6 +1011,7 @@ namespace Hanzo.Player.Core
 
             // Heal UI
             targetHealthFill = 1f;
+            UpdateHealthText();
             if (healthUIFill != null)
             {
                 if (animateHealthBar)
@@ -952,7 +1035,8 @@ namespace Hanzo.Player.Core
                 damageOverlay.color = c;
             }
 
-            Debug.Log($"[PlayerHealth] 🔄 {GetPlayerName()} respawned at {respawnPosition}");
+            if (showDebugInfo)
+                Debug.Log($"[PlayerHealth] 🔄 {GetPlayerName()} respawned at {respawnPosition}");
             OnPlayerRespawned?.Invoke();
 
             if (!isOfflineMode && photonView != null)
@@ -970,7 +1054,8 @@ namespace Hanzo.Player.Core
             if (playerVirtualCamera != null)
             {
                 playerVirtualCamera.enabled = false;
-                Debug.Log("[PlayerHealth] 📷 Camera disabled");
+                if (showDebugInfo)
+                    Debug.Log("[PlayerHealth] 📷 Camera disabled");
             }
         }
 
@@ -979,7 +1064,8 @@ namespace Hanzo.Player.Core
             if (playerVirtualCamera != null)
             {
                 playerVirtualCamera.enabled = true;
-                Debug.Log("[PlayerHealth] 📷 Camera enabled");
+                if (showDebugInfo)
+                    Debug.Log("[PlayerHealth] 📷 Camera enabled");
             }
         }
 
@@ -1033,7 +1119,9 @@ namespace Hanzo.Player.Core
         private void RPC_SyncHealthUpdate(float newHealth)
         {
             currentHealth = newHealth;
-            Debug.Log($"[PlayerHealth] [Remote] {GetPlayerName()} health synced: {currentHealth}");
+            UpdateHealthText();
+            if (showDebugInfo)
+                Debug.Log($"[PlayerHealth] [Remote] {GetPlayerName()} health synced: {currentHealth}");
         }
 
         [PunRPC]
@@ -1044,7 +1132,8 @@ namespace Hanzo.Player.Core
 
             isDead = true;
             DisablePlayer();
-            Debug.Log($"[PlayerHealth] [Remote] {GetPlayerName()} died");
+            if (showDebugInfo)
+                Debug.Log($"[PlayerHealth] [Remote] {GetPlayerName()} died");
         }
 
         [PunRPC]
@@ -1055,10 +1144,12 @@ namespace Hanzo.Player.Core
 
             isDead = false;
             currentHealth = maxHealth;
+            UpdateHealthText();
             transform.position = position;
             EnablePlayer();
 
-            Debug.Log($"[PlayerHealth] [Remote] {GetPlayerName()} respawned");
+            if (showDebugInfo)
+                Debug.Log($"[PlayerHealth] [Remote] {GetPlayerName()} respawned");
         }
 
         private void OnDestroy()
@@ -1073,6 +1164,7 @@ namespace Hanzo.Player.Core
                 StopCoroutine(healthBarCoroutine);
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!showDebugInfo || !IsLocalPlayer())
@@ -1095,5 +1187,6 @@ namespace Hanzo.Player.Core
             GUILayout.Label($"Status: {(IsAlive ? "ALIVE" : "DEAD")}");
             GUILayout.EndArea();
         }
+#endif
     }
 }

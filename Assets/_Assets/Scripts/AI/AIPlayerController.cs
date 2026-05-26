@@ -33,6 +33,10 @@ namespace Hanzo.AI
         [SerializeField]
         private AIBehaviorProfile behaviorProfile;
 
+        [Header("Utility AI")]
+        [SerializeField]
+        private AIUtilityProfile utilityProfile;
+
         [Header("Adaptive AI")]
         [SerializeField]
         private bool enableAdaptiveTuning = true;
@@ -108,19 +112,37 @@ namespace Hanzo.AI
 
         [Header("Debug")]
         [SerializeField]
-        private bool showDebugInfo = true;
+        private bool showDebugInfo = false;
 
         [SerializeField]
-        private bool showGizmos = true;
+        private bool showGizmos = false;
 
         private Transform _pendingDestructibleTarget;
+        private const int MaxTargetQueryResults = 64;
+        private const int MaxDestructibleQueryResults = 48;
+        private readonly Collider[] targetQueryBuffer = new Collider[MaxTargetQueryResults];
+        private readonly Collider[] destructibleQueryBuffer =
+            new Collider[MaxDestructibleQueryResults];
+        private readonly HashSet<Transform> visitedTargetRoots = new HashSet<Transform>();
         private AIBehaviorProfile baseBehaviorProfile;
         private AIBehaviorProfile runtimeBehaviorProfile;
+        private AIUtilityProfile runtimeUtilityProfile;
         private AIPersonality resolvedPersonality = AIPersonality.Auto;
         private AdaptiveAIDirector adaptiveDirector;
         private AIAdaptiveTuning lastAdaptiveTuning = AIAdaptiveTuning.Neutral;
         private int aiId;
         private string aiDisplayName;
+        private bool tacticalDefaultsCaptured;
+        private float baseDetectionRadius;
+        private float baseVisionAngle;
+        private float baseDashRange;
+        private float baseDestructibleDashRange;
+        private float baseMinDashDistance;
+        private float baseSpeedBoostRange;
+        private float baseSafeDistance;
+        private float baseStrafeSpeed;
+        private float baseRepositionInterval;
+        private float basePredictionTime;
 
         // ── Component references ──────────────────────────────────────────────
         private PlayerInputHandler inputHandler;
@@ -164,6 +186,8 @@ namespace Hanzo.AI
         private int deathCount;
         private int dashAttempts;
         private float adaptivePressure;
+        private AIUtilityAction lastUtilityAction = AIUtilityAction.None;
+        private float lastUtilityScore;
 
         // ── Coroutines ────────────────────────────────────────────────────────
         private Coroutine aiLoopCoroutine;
@@ -183,6 +207,10 @@ namespace Hanzo.AI
         private AIBehaviorProfile Profile => runtimeBehaviorProfile != null
             ? runtimeBehaviorProfile
             : behaviorProfile;
+
+        private AIUtilityProfile UtilityProfile => runtimeUtilityProfile != null
+            ? runtimeUtilityProfile
+            : utilityProfile;
 
         private float HealthPercent
         {
@@ -206,6 +234,7 @@ namespace Hanzo.AI
             healthComponent = GetComponent<PlayerHealthComponent>();
             stateController = GetComponent<PlayerStateController>();
             dashCollisionHandler = GetComponent<DashCollisionHandler>();
+            CaptureTacticalDefaults();
             ReadIdentityFromPhotonData();
 
             if (inputHandler == null || !inputHandler.IsAIControlled())
@@ -221,7 +250,9 @@ namespace Hanzo.AI
             baseBehaviorProfile = behaviorProfile;
             resolvedPersonality = ResolvePersonality(personality);
             CreateRuntimeProfile();
+            EnsureUtilityProfile();
             ApplyAdaptiveTuning(AIAdaptiveTuning.Neutral);
+            ApplyPersonalityTacticalBias();
 
             patrolCenter = transform.position;
 
@@ -343,59 +374,14 @@ namespace Hanzo.AI
 
             if (evasionTimer > 0)
             {
+                lastUtilityAction = AIUtilityAction.Evade;
+                lastUtilityScore = 1f;
                 currentState = AIState.Evading;
                 return;
             }
 
-            FindTarget();
-
-            if (currentTarget != null)
-            {
-                float dist = Vector3.Distance(transform.position, currentTarget.position);
-                float adaptiveSafeDistance = GetAdaptiveSafeDistance();
-                bool canDash = CanUseDash();
-
-                if (
-                    canDash
-                    && resolvedPersonality == AIPersonality.Trickster
-                    && ShouldUseDestructibleDash()
-                    && TryReserveLaunchableDestructibleToward(currentTarget)
-                )
-                {
-                    currentState = AIState.DashingDestructible;
-                }
-                else if (dist <= dashRange && dist >= minDashDistance && canDash && ShouldUseDash(dist))
-                {
-                    currentState = AIState.Dashing;
-                }
-                // NEW — check for a nearby destructible worth launching at the target
-                else if (
-                    canDash
-                    && ShouldUseDestructibleDash()
-                    && TryReserveLaunchableDestructibleToward(currentTarget)
-                )
-                {
-                    currentState = AIState.DashingDestructible;
-                }
-                else if (dist <= adaptiveSafeDistance && ShouldEvadeAtDistance())
-                {
-                    currentState = AIState.Evading;
-                    InitiateEvasion();
-                }
-                else if (dist <= speedBoostRange && CanUseSpeedBoost())
-                {
-                    currentState = AIState.SpeedBoosting;
-                }
-                else
-                {
-                    currentState = AIState.Chasing;
-                }
-            }
-            else if (currentState != AIState.Patrolling)
-            {
-                GenerateNewWaypoint();
-                currentState = AIState.Patrolling;
-            }
+            AIUtilityDecision decision = ChooseBestUtilityDecision();
+            ApplyUtilityDecision(decision);
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -490,31 +476,49 @@ namespace Hanzo.AI
             if (target == null)
                 return false;
 
-            Collider[] nearby = Physics.OverlapSphere(
+            int nearbyCount = Physics.OverlapSphereNonAlloc(
                 transform.position,
                 destructibleDashRange,
-                dashCollisionHandler != null ? dashCollisionHandler.DestructibleLayer : ~0
+                destructibleQueryBuffer,
+                dashCollisionHandler != null ? dashCollisionHandler.DestructibleLayer : ~0,
+                QueryTriggerInteraction.UseGlobal
             );
 
-            Vector3 toTarget = (target.position - transform.position).normalized;
+            Vector3 toTarget = target.position - transform.position;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude <= Mathf.Epsilon)
+                return false;
 
-            foreach (var col in nearby)
+            toTarget.Normalize();
+            float bestAngle = 45f;
+
+            for (int i = 0; i < nearbyCount; i++)
             {
+                Collider col = destructibleQueryBuffer[i];
+                if (col == null)
+                    continue;
+
                 // Must be a recognised destructible tag
                 if (!IsDestructibleTag(col.tag))
                     continue;
 
-                Vector3 toObj = (col.transform.position - transform.position).normalized;
+                Vector3 toObj = col.transform.position - transform.position;
+                toObj.y = 0f;
+                if (toObj.sqrMagnitude <= Mathf.Epsilon)
+                    continue;
+
+                toObj.Normalize();
                 float angle = Vector3.Angle(toTarget, toObj);
 
                 // Only pursue objects that are roughly between the AI and the target
-                if (angle < 45f)
+                if (angle < bestAngle)
                 {
                     destructible = col.transform;
-                    return true;
+                    bestAngle = angle;
                 }
             }
-            return false;
+
+            return destructible != null;
         }
 
         private bool IsDestructibleTag(string tag)
@@ -615,14 +619,16 @@ namespace Hanzo.AI
             StartCoroutine(ExecuteSpeedBoostSequence());
         }
 
-        private IEnumerator ExecuteSpeedBoostSequence()
+        private IEnumerator ExecuteSpeedBoostSequence(bool resumeChase = true)
         {
             isExecutingSpeedBoost = true;
 
             if (inputHandler != null)
                 inputHandler.TriggerAISpeedBoost();
 
-            currentState = AIState.Chasing;
+            if (resumeChase)
+                currentState = AIState.Chasing;
+
             yield return new WaitForSeconds(2f);
 
             isExecutingSpeedBoost = false;
@@ -630,6 +636,7 @@ namespace Hanzo.AI
 
         private void ExecuteEvasion()
         {
+            TryUseSpeedBoostDuringEvasion();
             MoveInDirection(evasionDirection);
             evasionTimer -= currentDecisionDelay;
         }
@@ -637,6 +644,355 @@ namespace Hanzo.AI
         // ─────────────────────────────────────────────────────────────────────
         // HELPERS
         // ─────────────────────────────────────────────────────────────────────
+
+        private AIUtilityDecision ChooseBestUtilityDecision()
+        {
+            AIUtilityContext patrolContext = BuildBaseUtilityContext();
+            AIUtilityDecision best = CreateUtilityDecision(AIUtilityAction.Patrol, patrolContext);
+
+            int targetCount = Physics.OverlapSphereNonAlloc(
+                transform.position,
+                detectionRadius,
+                targetQueryBuffer,
+                targetLayer,
+                QueryTriggerInteraction.UseGlobal
+            );
+            visitedTargetRoots.Clear();
+
+            for (int i = 0; i < targetCount; i++)
+            {
+                Collider col = targetQueryBuffer[i];
+                if (!TryBuildTargetUtilityContext(col, visitedTargetRoots, out AIUtilityContext context))
+                    continue;
+
+                ConsiderUtilityDecision(ref best, AIUtilityAction.Chase, context);
+                ConsiderUtilityDecision(ref best, AIUtilityAction.Dash, context);
+                ConsiderUtilityDecision(ref best, AIUtilityAction.DestructibleDash, context);
+                ConsiderUtilityDecision(ref best, AIUtilityAction.SpeedBoost, context);
+                ConsiderUtilityDecision(ref best, AIUtilityAction.Evade, context);
+            }
+
+            return best;
+        }
+
+        private AIUtilityContext BuildBaseUtilityContext()
+        {
+            return new AIUtilityContext
+            {
+                hasTarget = false,
+                adaptiveSafeDistance = GetAdaptiveSafeDistance(),
+                lowHealthPressure = LowHealthPressure,
+                recentDamagePressure = GetRecentDamagePressure(10f),
+            };
+        }
+
+        private bool TryBuildTargetUtilityContext(
+            Collider targetCollider,
+            HashSet<Transform> visitedRoots,
+            out AIUtilityContext context
+        )
+        {
+            context = BuildBaseUtilityContext();
+
+            if (targetCollider == null)
+                return false;
+
+            Transform targetRoot = targetCollider.transform.root;
+            if (targetRoot == transform.root || visitedRoots.Contains(targetRoot))
+                return false;
+
+            visitedRoots.Add(targetRoot);
+
+            PlayerHealthComponent targetHealth =
+                targetCollider.GetComponentInParent<PlayerHealthComponent>();
+            if (targetHealth != null && !targetHealth.IsAlive)
+                return false;
+
+            Transform target = targetHealth != null ? targetHealth.transform : targetRoot;
+            Vector3 toTarget = target.position - transform.position;
+            toTarget.y = 0f;
+
+            if (toTarget.sqrMagnitude <= Mathf.Epsilon)
+                return false;
+
+            float angle = Vector3.Angle(transform.forward, toTarget.normalized);
+            if (angle > visionAngle / 2f)
+                return false;
+
+            float distance = toTarget.magnitude;
+            bool canDash = CanUseDash();
+            bool canSpeedBoost = CanUseSpeedBoostAbility() && distance <= speedBoostRange;
+
+            Transform destructibleTarget = null;
+            bool hasLaunchableDestructible =
+                canDash && TryFindLaunchableDestructibleToward(target, out destructibleTarget);
+
+            float adaptiveSafeDistance = GetAdaptiveSafeDistance();
+            float safeDistanceForMath = Mathf.Max(0.1f, adaptiveSafeDistance);
+            float preferredDashDistance = Mathf.Lerp(minDashDistance, dashRange, 0.58f);
+            float boostSpan = Mathf.Max(0.1f, speedBoostRange - dashRange);
+            float rawTargetPriority =
+                adaptiveDirector != null
+                    ? adaptiveDirector.GetTargetPriority(
+                        this,
+                        target,
+                        distance,
+                        hasLaunchableDestructible
+                    )
+                    : 0f;
+
+            context = new AIUtilityContext
+            {
+                target = target,
+                utilityTarget = destructibleTarget,
+                hasTarget = true,
+                canDash = canDash,
+                inDashRange = canDash && distance <= dashRange && distance >= minDashDistance,
+                canSpeedBoost = canSpeedBoost,
+                hasLaunchableDestructible = hasLaunchableDestructible,
+                targetRecentlyDamagedUs = WasRecentlyDamagedBy(target, 30f),
+                isCurrentTarget = currentTarget != null && target.root == currentTarget.root,
+                distanceToTarget = distance,
+                normalizedDistance = Mathf.Clamp01(distance / Mathf.Max(1f, detectionRadius)),
+                targetPriority = Mathf.Clamp(rawTargetPriority / 14f, -1f, 1f),
+                adaptiveSafeDistance = adaptiveSafeDistance,
+                closeDanger = Mathf.Clamp01(1f - distance / safeDistanceForMath),
+                dashRangeFit = Mathf.Clamp01(
+                    1f - Mathf.Abs(distance - preferredDashDistance) / Mathf.Max(0.1f, dashRange)
+                ),
+                speedBoostRangeFit = Mathf.Clamp01((distance - dashRange * 0.65f) / boostSpan),
+                recentDamagePressure = GetRecentDamagePressure(10f),
+                lowHealthPressure = LowHealthPressure,
+            };
+
+            return true;
+        }
+
+        private AIUtilityDecision CreateUtilityDecision(
+            AIUtilityAction action,
+            AIUtilityContext context
+        )
+        {
+            float score =
+                UtilityProfile != null
+                    ? UtilityProfile.Evaluate(
+                        action,
+                        context,
+                        resolvedPersonality,
+                        Profile,
+                        GetActiveUtilityAction()
+                    )
+                    : 0f;
+
+            return new AIUtilityDecision(action, context.target, context.utilityTarget, score);
+        }
+
+        private void ConsiderUtilityDecision(
+            ref AIUtilityDecision best,
+            AIUtilityAction action,
+            AIUtilityContext context
+        )
+        {
+            AIUtilityDecision candidate = CreateUtilityDecision(action, context);
+            if (candidate.score > best.score)
+                best = candidate;
+        }
+
+        private void ApplyUtilityDecision(AIUtilityDecision decision)
+        {
+            lastUtilityAction = decision.action;
+            lastUtilityScore = decision.score;
+            currentTarget = decision.target;
+
+            switch (decision.action)
+            {
+                case AIUtilityAction.Patrol:
+                    _pendingDestructibleTarget = null;
+                    currentTarget = null;
+                    if (currentState != AIState.Patrolling)
+                        GenerateNewWaypoint();
+                    currentState = AIState.Patrolling;
+                    break;
+                case AIUtilityAction.Chase:
+                    _pendingDestructibleTarget = null;
+                    currentState = currentTarget != null ? AIState.Chasing : AIState.Patrolling;
+                    if (currentTarget == null)
+                        GenerateNewWaypoint();
+                    break;
+                case AIUtilityAction.Dash:
+                    _pendingDestructibleTarget = null;
+                    currentState = currentTarget != null ? AIState.Dashing : AIState.Patrolling;
+                    break;
+                case AIUtilityAction.DestructibleDash:
+                    _pendingDestructibleTarget = decision.utilityTarget;
+                    currentState =
+                        currentTarget != null && _pendingDestructibleTarget != null
+                            ? AIState.DashingDestructible
+                            : AIState.Chasing;
+                    break;
+                case AIUtilityAction.SpeedBoost:
+                    _pendingDestructibleTarget = null;
+                    currentState = currentTarget != null ? AIState.SpeedBoosting : AIState.Patrolling;
+                    break;
+                case AIUtilityAction.Evade:
+                    _pendingDestructibleTarget = null;
+                    if (currentTarget != null)
+                    {
+                        currentState = AIState.Evading;
+                        InitiateEvasion();
+                    }
+                    else
+                    {
+                        currentState = AIState.Patrolling;
+                        GenerateNewWaypoint();
+                    }
+                    break;
+                default:
+                    _pendingDestructibleTarget = null;
+                    currentState = currentTarget != null ? AIState.Chasing : AIState.Patrolling;
+                    break;
+            }
+        }
+
+        private AIUtilityAction GetActiveUtilityAction()
+        {
+            switch (currentState)
+            {
+                case AIState.Patrolling:
+                    return AIUtilityAction.Patrol;
+                case AIState.Chasing:
+                    return AIUtilityAction.Chase;
+                case AIState.Dashing:
+                    return AIUtilityAction.Dash;
+                case AIState.DashingDestructible:
+                    return AIUtilityAction.DestructibleDash;
+                case AIState.SpeedBoosting:
+                    return AIUtilityAction.SpeedBoost;
+                case AIState.Evading:
+                    return AIUtilityAction.Evade;
+                default:
+                    return AIUtilityAction.None;
+            }
+        }
+
+        private void CaptureTacticalDefaults()
+        {
+            if (tacticalDefaultsCaptured)
+                return;
+
+            baseDetectionRadius = detectionRadius;
+            baseVisionAngle = visionAngle;
+            baseDashRange = dashRange;
+            baseDestructibleDashRange = destructibleDashRange;
+            baseMinDashDistance = minDashDistance;
+            baseSpeedBoostRange = speedBoostRange;
+            baseSafeDistance = safeDistance;
+            baseStrafeSpeed = strafeSpeed;
+            baseRepositionInterval = repositionInterval;
+            basePredictionTime = predictionTime;
+            tacticalDefaultsCaptured = true;
+        }
+
+        private void ApplyPersonalityTacticalBias()
+        {
+            if (!tacticalDefaultsCaptured)
+                CaptureTacticalDefaults();
+
+            float detectionMultiplier = 1f;
+            float visionMultiplier = 1f;
+            float dashMultiplier = 1f;
+            float destructibleDashMultiplier = 1f;
+            float minDashMultiplier = 1f;
+            float speedBoostMultiplier = 1f;
+            float safeDistanceMultiplier = 1f;
+            float strafeMultiplier = 1f;
+            float repositionMultiplier = 1f;
+            float predictionMultiplier = 1f;
+
+            switch (resolvedPersonality)
+            {
+                case AIPersonality.Hunter:
+                    detectionMultiplier = 1.2f;
+                    visionMultiplier = 1.15f;
+                    dashMultiplier = 1.05f;
+                    destructibleDashMultiplier = 0.85f;
+                    minDashMultiplier = 0.85f;
+                    speedBoostMultiplier = 1.25f;
+                    safeDistanceMultiplier = 0.75f;
+                    strafeMultiplier = 0.75f;
+                    repositionMultiplier = 1.2f;
+                    predictionMultiplier = 1.35f;
+                    break;
+                case AIPersonality.Brawler:
+                    detectionMultiplier = 1.05f;
+                    dashMultiplier = 1.3f;
+                    destructibleDashMultiplier = 0.9f;
+                    minDashMultiplier = 0.6f;
+                    speedBoostMultiplier = 0.75f;
+                    safeDistanceMultiplier = 0.55f;
+                    strafeMultiplier = 0.45f;
+                    repositionMultiplier = 1.35f;
+                    predictionMultiplier = 0.85f;
+                    break;
+                case AIPersonality.Trickster:
+                    detectionMultiplier = 1.1f;
+                    visionMultiplier = 1.1f;
+                    dashMultiplier = 1.05f;
+                    destructibleDashMultiplier = 1.55f;
+                    minDashMultiplier = 0.75f;
+                    speedBoostMultiplier = 1.15f;
+                    safeDistanceMultiplier = 1.05f;
+                    strafeMultiplier = 1.65f;
+                    repositionMultiplier = 0.5f;
+                    predictionMultiplier = 1.15f;
+                    break;
+                case AIPersonality.Survivor:
+                    detectionMultiplier = 0.95f;
+                    visionMultiplier = 1.25f;
+                    dashMultiplier = 0.75f;
+                    destructibleDashMultiplier = 0.7f;
+                    minDashMultiplier = 1.2f;
+                    speedBoostMultiplier = 1.3f;
+                    safeDistanceMultiplier = 1.7f;
+                    strafeMultiplier = 1.25f;
+                    repositionMultiplier = 0.65f;
+                    predictionMultiplier = 0.9f;
+                    break;
+                case AIPersonality.Rival:
+                    detectionMultiplier = 1.15f;
+                    visionMultiplier = 1.15f;
+                    dashMultiplier = 1.15f;
+                    destructibleDashMultiplier = 1.05f;
+                    minDashMultiplier = 0.8f;
+                    speedBoostMultiplier = 1.05f;
+                    safeDistanceMultiplier = 0.85f;
+                    strafeMultiplier = 0.9f;
+                    repositionMultiplier = 0.75f;
+                    predictionMultiplier = 1.2f;
+                    break;
+            }
+
+            detectionRadius = Mathf.Max(4f, baseDetectionRadius * detectionMultiplier);
+            visionAngle = Mathf.Clamp(baseVisionAngle * visionMultiplier, 30f, 180f);
+
+            float tunedDashRange = Mathf.Max(1f, baseDashRange * dashMultiplier);
+            minDashDistance = Mathf.Clamp(
+                baseMinDashDistance * minDashMultiplier,
+                0.5f,
+                Mathf.Max(0.5f, tunedDashRange - 0.25f)
+            );
+            dashRange = Mathf.Max(tunedDashRange, minDashDistance + 0.25f);
+
+            destructibleDashRange = Mathf.Max(
+                dashRange,
+                baseDestructibleDashRange * destructibleDashMultiplier
+            );
+            speedBoostRange = Mathf.Max(2f, baseSpeedBoostRange * speedBoostMultiplier);
+            safeDistance = Mathf.Max(0.5f, baseSafeDistance * safeDistanceMultiplier);
+            strafeSpeed = Mathf.Max(0f, baseStrafeSpeed * strafeMultiplier);
+            repositionInterval = Mathf.Max(0.35f, baseRepositionInterval * repositionMultiplier);
+            predictionTime = Mathf.Clamp(basePredictionTime * predictionMultiplier, 0.1f, 1.5f);
+        }
 
         /// <summary>
         /// Rolls a new random attack cooldown for this AI instance.
@@ -657,50 +1013,6 @@ namespace Hanzo.AI
                     $"[AI:{name}] New attack cooldown: {newCooldown:F3}s "
                         + $"(total pending: {attackCooldownTimer:F3}s)"
                 );
-        }
-
-        private void FindTarget()
-        {
-            Collider[] potentialTargets = Physics.OverlapSphere(
-                transform.position,
-                detectionRadius,
-                targetLayer
-            );
-
-            Transform closestTarget = null;
-            float bestTargetScore = Mathf.Infinity;
-
-            foreach (var col in potentialTargets)
-            {
-                if (col.transform.root == transform.root)
-                    continue;
-
-                Vector3 dir = (col.transform.position - transform.position).normalized;
-                float angle = Vector3.Angle(transform.forward, dir);
-                if (angle > visionAngle / 2f)
-                    continue;
-
-                var targetHealth = col.GetComponentInParent<PlayerHealthComponent>();
-                if (targetHealth != null && !targetHealth.IsAlive)
-                    continue;
-
-                float distance = Vector3.Distance(transform.position, col.transform.position);
-                float targetScore = distance - Profile.aggressiveness * 2f;
-
-                if (currentTarget != null && col.transform.root == currentTarget.root)
-                    targetScore -= Profile.targetPersistence * 4f;
-
-                if (adaptiveDirector != null)
-                    targetScore -= adaptiveDirector.GetTargetPriority(this, col.transform, distance);
-
-                if (targetScore < bestTargetScore)
-                {
-                    bestTargetScore = targetScore;
-                    closestTarget = col.transform;
-                }
-            }
-
-            currentTarget = closestTarget;
         }
 
         private Vector3 PredictTargetPosition(Transform target)
@@ -742,18 +1054,25 @@ namespace Hanzo.AI
 
         private void InitiateEvasion()
         {
-            if (currentTarget == null)
+            InitiateEvasionFrom(currentTarget);
+        }
+
+        private void InitiateEvasionFrom(Transform threat)
+        {
+            if (threat == null)
                 return;
 
-            Vector3 awayFromTarget = (transform.position - currentTarget.position).normalized;
+            Vector3 awayFromTarget = (transform.position - threat.position).normalized;
             Vector3 randomOffset = new Vector3(
                 Random.Range(-1f, 1f),
                 0,
                 Random.Range(-1f, 1f)
             ).normalized;
 
-            evasionDirection = (awayFromTarget + randomOffset * 0.3f).normalized;
-            evasionTimer = EVASION_DURATION;
+            evasionDirection = (
+                awayFromTarget + randomOffset * GetEvasionRandomOffsetWeight()
+            ).normalized;
+            evasionTimer = EVASION_DURATION * GetEvasionDurationMultiplier();
         }
 
         /// <summary>
@@ -773,10 +1092,74 @@ namespace Hanzo.AI
             return movementController.DashAbility.CanActivate && !isExecutingDash;
         }
 
-        private bool CanUseSpeedBoost()
+        private bool CanUseSpeedBoostAbility()
         {
             return !isExecutingSpeedBoost
-                && Random.value < Profile.speedBoostUseProbability;
+                && movementController != null
+                && movementController.SpeedBoostAbility != null
+                && movementController.SpeedBoostAbility.CanActivate;
+        }
+
+        private void TryUseSpeedBoostDuringEvasion()
+        {
+            float chance = 0f;
+
+            switch (resolvedPersonality)
+            {
+                case AIPersonality.Survivor:
+                    chance = 0.45f + LowHealthPressure * 0.25f;
+                    break;
+                case AIPersonality.Trickster:
+                    chance = 0.2f;
+                    break;
+                case AIPersonality.Rival:
+                    chance = lastAdaptiveTuning.recentDamagePressure * 0.2f;
+                    break;
+            }
+
+            if (chance <= 0f || !CanUseSpeedBoostAbility())
+                return;
+
+            if (Random.value < Mathf.Clamp01(chance))
+                StartCoroutine(ExecuteSpeedBoostSequence(false));
+        }
+
+        private float GetEvasionDurationMultiplier()
+        {
+            switch (resolvedPersonality)
+            {
+                case AIPersonality.Hunter:
+                    return 0.7f;
+                case AIPersonality.Brawler:
+                    return 0.55f;
+                case AIPersonality.Trickster:
+                    return 1.1f;
+                case AIPersonality.Survivor:
+                    return 1.45f;
+                case AIPersonality.Rival:
+                    return 0.85f;
+                default:
+                    return 1f;
+            }
+        }
+
+        private float GetEvasionRandomOffsetWeight()
+        {
+            switch (resolvedPersonality)
+            {
+                case AIPersonality.Hunter:
+                    return 0.15f;
+                case AIPersonality.Brawler:
+                    return 0.1f;
+                case AIPersonality.Trickster:
+                    return 0.75f;
+                case AIPersonality.Survivor:
+                    return 0.35f;
+                case AIPersonality.Rival:
+                    return 0.25f;
+                default:
+                    return 0.3f;
+            }
         }
 
         private float GetRandomReactionDelay()
@@ -797,51 +1180,73 @@ namespace Hanzo.AI
             return Random.Range(min, max);
         }
 
-        private bool ShouldUseDash(float distanceToTarget)
-        {
-            float chance = Profile.dashUseProbability;
-            chance += Profile.aggressiveness * 0.12f;
-
-            if (distanceToTarget < dashRange * 0.6f)
-                chance += Profile.recklessness * 0.08f;
-
-            return Random.value < Mathf.Clamp01(chance);
-        }
-
-        private bool ShouldUseDestructibleDash()
-        {
-            float chance = Profile.dashUseProbability * Mathf.Lerp(0.25f, 0.75f, Profile.recklessness);
-
-            if (resolvedPersonality == AIPersonality.Trickster)
-                chance += 0.25f;
-
-            if (lastAdaptiveTuning.matchPressure > 0f)
-                chance += lastAdaptiveTuning.matchPressure * 0.1f;
-
-            return Random.value < Mathf.Clamp01(chance);
-        }
-
-        private bool ShouldEvadeAtDistance()
-        {
-            float chance = Profile.evasionOnDamageChance;
-            chance += LowHealthPressure * 0.35f;
-            chance -= Profile.recklessness * 0.15f;
-
-            if (resolvedPersonality == AIPersonality.Survivor)
-                chance += 0.2f;
-
-            if (resolvedPersonality == AIPersonality.Brawler)
-                chance -= 0.15f;
-
-            return Random.value < Mathf.Clamp01(chance);
-        }
-
         private float GetAdaptiveSafeDistance()
         {
             float caution = 1f - Profile.recklessness;
             float multiplier = Mathf.Lerp(0.75f, 1.35f, caution);
             multiplier += LowHealthPressure * 0.35f;
             return safeDistance * multiplier;
+        }
+
+        private bool ShouldRetaliateOnDamage()
+        {
+            switch (resolvedPersonality)
+            {
+                case AIPersonality.Brawler:
+                case AIPersonality.Rival:
+                    return true;
+                case AIPersonality.Hunter:
+                    return Random.value < 0.65f;
+                case AIPersonality.Trickster:
+                    return Random.value < 0.35f;
+                default:
+                    return false;
+            }
+        }
+
+        private Transform ResolveCombatantTransform(GameObject source)
+        {
+            if (source == null)
+                return null;
+
+            PlayerHealthComponent sourceHealth = source.GetComponentInParent<PlayerHealthComponent>();
+            if (sourceHealth != null && sourceHealth != healthComponent)
+                return sourceHealth.transform;
+
+            PhotonView sourceView = source.GetComponentInParent<PhotonView>();
+            if (sourceView != null && sourceView.transform.root != transform.root)
+                return sourceView.transform;
+
+            return null;
+        }
+
+        private float GetDamageReactionEvasionChance()
+        {
+            float chance = Profile.evasionOnDamageChance;
+            chance += LowHealthPressure * 0.25f;
+            chance -= Profile.recklessness * 0.1f;
+
+            switch (resolvedPersonality)
+            {
+                case AIPersonality.Hunter:
+                    chance -= 0.25f;
+                    break;
+                case AIPersonality.Brawler:
+                    chance -= 0.45f;
+                    break;
+                case AIPersonality.Trickster:
+                    chance += 0.12f;
+                    break;
+                case AIPersonality.Survivor:
+                    chance += 0.35f;
+                    break;
+                case AIPersonality.Rival:
+                    chance -= 0.12f;
+                    chance += lastAdaptiveTuning.recentDamagePressure * 0.2f;
+                    break;
+            }
+
+            return Mathf.Clamp01(chance);
         }
 
         public float GetRecentDamagePressure(float memorySeconds)
@@ -903,6 +1308,16 @@ namespace Hanzo.AI
             runtimeBehaviorProfile.hideFlags = HideFlags.DontSave;
         }
 
+        private void EnsureUtilityProfile()
+        {
+            if (utilityProfile != null || runtimeUtilityProfile != null)
+                return;
+
+            runtimeUtilityProfile = ScriptableObject.CreateInstance<AIUtilityProfile>();
+            runtimeUtilityProfile.name = $"{name}_RuntimeAIUtilityProfile";
+            runtimeUtilityProfile.hideFlags = HideFlags.DontSave;
+        }
+
         private void ResetRuntimeProfileFromBase()
         {
             if (runtimeBehaviorProfile == null)
@@ -961,41 +1376,55 @@ namespace Hanzo.AI
             switch (activePersonality)
             {
                 case AIPersonality.Hunter:
-                    profile.aggressiveness += 0.12f;
-                    profile.predictionAccuracy += 0.12f;
-                    profile.speedBoostUseProbability += 0.1f;
-                    profile.targetPersistence += 0.18f;
-                    profile.reactionTime -= 0.03f;
-                    profile.decisionInterval -= 0.03f;
+                    profile.aggressiveness += 0.25f;
+                    profile.predictionAccuracy += 0.25f;
+                    profile.speedBoostUseProbability += 0.25f;
+                    profile.targetPersistence += 0.3f;
+                    profile.evasionOnDamageChance -= 0.18f;
+                    profile.recklessness += 0.05f;
+                    profile.reactionTime -= 0.06f;
+                    profile.decisionInterval -= 0.05f;
+                    profile.attackCooldownMin -= 0.02f;
+                    profile.attackCooldownMax -= 0.08f;
                     break;
                 case AIPersonality.Brawler:
-                    profile.aggressiveness += 0.18f;
-                    profile.dashUseProbability += 0.18f;
-                    profile.recklessness += 0.25f;
-                    profile.evasionOnDamageChance -= 0.15f;
-                    profile.targetPersistence -= 0.08f;
-                    profile.attackCooldownMax -= 0.06f;
+                    profile.aggressiveness += 0.35f;
+                    profile.dashUseProbability += 0.25f;
+                    profile.recklessness += 0.35f;
+                    profile.evasionOnDamageChance -= 0.35f;
+                    profile.strafeProbability -= 0.25f;
+                    profile.predictionAccuracy -= 0.05f;
+                    profile.targetPersistence -= 0.15f;
+                    profile.attackCooldownMin -= 0.04f;
+                    profile.attackCooldownMax -= 0.12f;
                     break;
                 case AIPersonality.Trickster:
-                    profile.strafeProbability += 0.25f;
-                    profile.predictionAccuracy += 0.08f;
-                    profile.speedBoostUseProbability += 0.15f;
-                    profile.targetPersistence -= 0.1f;
-                    profile.recklessness += 0.08f;
+                    profile.dashUseProbability -= 0.12f;
+                    profile.strafeProbability += 0.35f;
+                    profile.predictionAccuracy += 0.12f;
+                    profile.speedBoostUseProbability += 0.18f;
+                    profile.evasionOnDamageChance += 0.05f;
+                    profile.targetPersistence -= 0.22f;
+                    profile.recklessness += 0.12f;
+                    profile.decisionInterval -= 0.04f;
                     break;
                 case AIPersonality.Survivor:
-                    profile.evasionOnDamageChance += 0.2f;
-                    profile.strafeProbability += 0.12f;
-                    profile.recklessness -= 0.2f;
-                    profile.dashUseProbability -= 0.08f;
-                    profile.attackCooldownMin += 0.04f;
-                    profile.attackCooldownMax += 0.08f;
+                    profile.evasionOnDamageChance += 0.35f;
+                    profile.speedBoostUseProbability += 0.25f;
+                    profile.strafeProbability += 0.25f;
+                    profile.recklessness -= 0.45f;
+                    profile.dashUseProbability -= 0.45f;
+                    profile.targetPersistence -= 0.25f;
+                    profile.attackCooldownMin += 0.14f;
+                    profile.attackCooldownMax += 0.22f;
                     break;
                 case AIPersonality.Rival:
-                    profile.targetPersistence += 0.25f;
-                    profile.aggressiveness += 0.08f + tuning.recentDamagePressure * 0.15f;
-                    profile.dashUseProbability += tuning.recentDamagePressure * 0.2f;
-                    profile.recklessness += tuning.recentDamagePressure * 0.15f;
+                    profile.targetPersistence += 0.35f;
+                    profile.aggressiveness += 0.18f + tuning.recentDamagePressure * 0.2f;
+                    profile.predictionAccuracy += 0.12f;
+                    profile.dashUseProbability += tuning.recentDamagePressure * 0.25f;
+                    profile.recklessness += tuning.recentDamagePressure * 0.2f;
+                    profile.reactionTime -= tuning.recentDamagePressure * 0.04f;
                     break;
             }
         }
@@ -1080,6 +1509,8 @@ namespace Hanzo.AI
             if (personality == AIPersonality.Auto)
                 resolvedPersonality = ResolvePersonality(personality);
 
+            ApplyPersonalityTacticalBias();
+
             if (runtimeBehaviorProfile != null)
                 ApplyAdaptiveTuning(lastAdaptiveTuning);
         }
@@ -1126,10 +1557,20 @@ namespace Hanzo.AI
 
             RecordDamageSource(source);
 
-            if (source != null && Random.value < Profile.evasionOnDamageChance)
+            if (source == null)
+                return;
+
+            Transform attacker = ResolveCombatantTransform(source);
+
+            if (attacker != null && ShouldRetaliateOnDamage())
             {
-                evasionDirection = (transform.position - source.transform.position).normalized;
-                evasionTimer = EVASION_DURATION;
+                currentTarget = attacker;
+                lastKnownTargetPosition = currentTarget.position;
+            }
+
+            if (Random.value < GetDamageReactionEvasionChance())
+            {
+                InitiateEvasionFrom(attacker != null ? attacker : source.transform);
                 currentState = AIState.Evading;
             }
         }
@@ -1170,7 +1611,8 @@ namespace Hanzo.AI
             GenerateNewWaypoint();
             currentState = AIState.Patrolling;
 
-            Debug.Log($"[AI:{name}] Respawned. Patrolling from {patrolCenter}");
+            if (showDebugInfo)
+                Debug.Log($"[AI:{name}] Respawned. Patrolling from {patrolCenter}");
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -1220,6 +1662,7 @@ namespace Hanzo.AI
             }
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!showDebugInfo)
@@ -1230,6 +1673,7 @@ namespace Hanzo.AI
             GUILayout.Label($"Personality: {resolvedPersonality}");
             GUILayout.Label($"Adaptive Pressure: {adaptivePressure:F2}");
             GUILayout.Label($"State: {currentState}");
+            GUILayout.Label($"Utility: {lastUtilityAction} ({lastUtilityScore:F2})");
             GUILayout.Label($"Target: {(currentTarget != null ? currentTarget.name : "None")}");
             GUILayout.Label(
                 $"Health: {healthComponent?.CurrentHealth:F1}/{healthComponent?.MaxHealth:F1}"
@@ -1252,6 +1696,7 @@ namespace Hanzo.AI
 
             GUILayout.EndArea();
         }
+#endif
     }
 
     public enum AIState

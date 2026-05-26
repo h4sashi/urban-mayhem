@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Photon.Pun;
+using Photon.Realtime;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
@@ -219,6 +220,7 @@ namespace Hanzo.Networking.PlayFab
         {
             Debug.Log("Login successful! PlayFab ID: " + result.PlayFabId);
             PlayFabId = result.PlayFabId;
+            ApplyPhotonUserId(PlayFabId);
             UpdateStatus("Login successful!");
 
             // Fetch display name before loading next scene
@@ -256,11 +258,29 @@ namespace Hanzo.Networking.PlayFab
         {
             Debug.Log("Registration successful! PlayFab ID: " + result.PlayFabId);
             PlayFabId = result.PlayFabId;
+            ApplyPhotonUserId(PlayFabId);
             PlayerEmail = signUpEmailInput.text.ToLower().Trim();
             ClearPlayerDisplayName();
 
             UpdateStatus("Registration successful!");
             LoadNextScene();
+        }
+
+        private void ApplyPhotonUserId(string playFabId)
+        {
+            if (string.IsNullOrWhiteSpace(playFabId))
+            {
+                return;
+            }
+
+            if (PhotonNetwork.AuthValues == null)
+            {
+                PhotonNetwork.AuthValues = new AuthenticationValues(playFabId);
+            }
+            else
+            {
+                PhotonNetwork.AuthValues.UserId = playFabId;
+            }
         }
 
         public void ApplyPlayerDisplayName(string displayName)

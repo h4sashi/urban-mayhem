@@ -16,17 +16,23 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float slideDistance = 44f;
 
     [Header("Button Feel")]
+    [SerializeField] private bool animateButtonHover = true;
     [SerializeField] private float buttonHoverScale = 1.06f;
     [SerializeField] private float buttonPressScale = 0.94f;
     [SerializeField] private float buttonSpeed = 14f;
 
     [Header("Ambient Motion")]
+    [SerializeField] private bool animateAmbientMotion = true;
+    [SerializeField] private bool animateColorPulses = true;
     [SerializeField] private float idleBobDistance = 3.5f;
     [SerializeField] private float idleBobSpeed = 1.1f;
     [SerializeField] private float glowPulseStrength = 0.12f;
 
     [Header("Panel Reveal")]
     [SerializeField] private float revealDuration = 0.28f;
+    [SerializeField] private float revealPollInterval = 0.1f;
+
+    private const float TransformEpsilon = 0.000001f;
 
     private readonly string[] introElementNames =
     {
@@ -62,6 +68,7 @@ public class UIManager : MonoBehaviour
     private readonly List<ColorPulseElement> colorPulseElements = new List<ColorPulseElement>();
     private readonly List<PanelRevealTarget> panelRevealTargets = new List<PanelRevealTarget>();
     private readonly Dictionary<RectTransform, Coroutine> panelRevealRoutines = new Dictionary<RectTransform, Coroutine>();
+    private float nextRevealPollTime;
 
     private void Awake()
     {
@@ -81,10 +88,26 @@ public class UIManager : MonoBehaviour
         float deltaTime = GetDeltaTime();
         float time = GetTime();
 
-        UpdateButtonMotion(deltaTime);
-        UpdateAmbientMotion(time);
-        UpdateColorPulses(time, deltaTime);
-        WatchPanelRevealTargets();
+        if (animateButtonHover)
+        {
+            UpdateButtonMotion(deltaTime);
+        }
+
+        if (animateAmbientMotion)
+        {
+            UpdateAmbientMotion(time);
+        }
+
+        if (animateColorPulses)
+        {
+            UpdateColorPulses(time, deltaTime);
+        }
+
+        if (panelRevealTargets.Count > 0 && time >= nextRevealPollTime)
+        {
+            nextRevealPollTime = time + Mathf.Max(0.02f, revealPollInterval);
+            WatchPanelRevealTargets();
+        }
     }
 
     private void OnDisable()
@@ -105,6 +128,7 @@ public class UIManager : MonoBehaviour
         idleBobSpeed = Mathf.Max(0f, idleBobSpeed);
         glowPulseStrength = Mathf.Clamp(glowPulseStrength, 0f, 0.4f);
         revealDuration = Mathf.Max(0.05f, revealDuration);
+        revealPollInterval = Mathf.Max(0.02f, revealPollInterval);
     }
 
     private void BuildRuntimeAnimationTargets()
@@ -120,9 +144,16 @@ public class UIManager : MonoBehaviour
     {
         sceneRects.Clear();
 
-        Canvas[] canvases = Resources.FindObjectsOfTypeAll<Canvas>();
         HashSet<RectTransform> uniqueRects = new HashSet<RectTransform>();
 
+        RectTransform rootRect = GetComponent<RectTransform>();
+        if (rootRect != null && IsSceneObject(rootRect.gameObject))
+        {
+            AddRectTransforms(rootRect.GetComponentsInChildren<RectTransform>(true), uniqueRects);
+            return;
+        }
+
+        Canvas[] canvases = GetComponentsInChildren<Canvas>(true);
         for (int i = 0; i < canvases.Length; i++)
         {
             Canvas canvas = canvases[i];
@@ -131,14 +162,29 @@ public class UIManager : MonoBehaviour
                 continue;
             }
 
-            RectTransform[] rects = canvas.GetComponentsInChildren<RectTransform>(true);
-            for (int rectIndex = 0; rectIndex < rects.Length; rectIndex++)
+            AddRectTransforms(canvas.GetComponentsInChildren<RectTransform>(true), uniqueRects);
+        }
+
+        if (sceneRects.Count > 0)
+        {
+            return;
+        }
+
+        Canvas parentCanvas = GetComponentInParent<Canvas>();
+        if (parentCanvas != null && IsSceneObject(parentCanvas.gameObject))
+        {
+            AddRectTransforms(parentCanvas.GetComponentsInChildren<RectTransform>(true), uniqueRects);
+        }
+    }
+
+    private void AddRectTransforms(RectTransform[] rects, HashSet<RectTransform> uniqueRects)
+    {
+        for (int rectIndex = 0; rectIndex < rects.Length; rectIndex++)
+        {
+            RectTransform rect = rects[rectIndex];
+            if (rect != null && uniqueRects.Add(rect))
             {
-                RectTransform rect = rects[rectIndex];
-                if (rect != null && uniqueRects.Add(rect))
-                {
-                    sceneRects.Add(rect);
-                }
+                sceneRects.Add(rect);
             }
         }
     }
@@ -362,7 +408,14 @@ public class UIManager : MonoBehaviour
 
             float targetScale = button.IsPressed ? buttonPressScale : button.IsHovering ? buttonHoverScale : 1f;
             Vector3 target = button.BaseScale * targetScale;
-            button.Rect.localScale = Vector3.Lerp(button.Rect.localScale, target, 1f - Mathf.Exp(-buttonSpeed * deltaTime));
+            Vector3 current = button.Rect.localScale;
+            if (Approximately(current, target))
+            {
+                continue;
+            }
+
+            Vector3 next = Vector3.Lerp(current, target, 1f - Mathf.Exp(-buttonSpeed * deltaTime));
+            button.Rect.localScale = Approximately(next, target) ? target : next;
         }
     }
 
@@ -590,6 +643,11 @@ public class UIManager : MonoBehaviour
     private static bool ContainsIgnoreCase(string value, string match)
     {
         return value != null && value.IndexOf(match, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static bool Approximately(Vector3 first, Vector3 second)
+    {
+        return (first - second).sqrMagnitude <= TransformEpsilon;
     }
 
     private static float EaseOutCubic(float value)

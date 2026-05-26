@@ -287,6 +287,27 @@ namespace Hanzo.Player.Abilities
             
             Debug.Log($"Dash ended. Cooldown: {cooldownTimer}s, Stack: {stackLevel}");
         }
+
+        public void Cancel()
+        {
+            if (!isActive && chainDashesRemaining == 0)
+                return;
+
+            isActive = false;
+            dashTimer = 0f;
+            chainDashesRemaining = 0;
+            chainDashTimer = 0f;
+            cooldownTimer = Mathf.Max(cooldownTimer, settings.DashCooldown);
+
+            if (trailRenderer != null)
+                trailRenderer.emitting = false;
+
+            if (animator != null)
+                animator.SetBool(IsDashingHash, false);
+
+            if (photonView != null && photonView.IsMine && PhotonNetwork.IsConnected)
+                photonView.RPC("RPC_StopDashVisuals", RpcTarget.OthersBuffered);
+        }
         
         public void Cleanup()
         {

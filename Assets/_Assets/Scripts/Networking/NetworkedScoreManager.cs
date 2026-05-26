@@ -23,7 +23,7 @@ namespace Hanzo.Networking
         private int survivalBonusPerDeath = 5; // NEW: Bonus for each player death
 
         [SerializeField]
-        private bool showDebugInfo = true;
+        private bool showDebugInfo = false;
 
         // Custom property keys
         private const string SCORE_KEY = "PlayerScore";
@@ -148,9 +148,12 @@ namespace Hanzo.Networking
                 };
                 player.SetCustomProperties(props);
 
-                Debug.Log(
-                    $"[ScoreManager] Initialized score for player {player.NickName} (ID: {player.ActorNumber})"
-                );
+                if (showDebugInfo)
+                {
+                    Debug.Log(
+                        $"[ScoreManager] Initialized score for player {player.NickName} (ID: {player.ActorNumber})"
+                    );
+                }
             }
         }
 
@@ -199,9 +202,12 @@ namespace Hanzo.Networking
             Hashtable props = new Hashtable { { SCORE_KEY, newScore }, { KILLS_KEY, newKills } };
             player.SetCustomProperties(props);
 
-            Debug.Log(
-                $"[ScoreManager] {player.NickName} gained kill #{newKills} | Score: {newScore}"
-            );
+            if (showDebugInfo)
+            {
+                Debug.Log(
+                    $"[ScoreManager] {player.NickName} gained kill #{newKills} | Score: {newScore}"
+                );
+            }
         }
 
         /// <summary>
@@ -231,9 +237,12 @@ namespace Hanzo.Networking
                 PhotonNetwork.CurrentRoom.SetCustomProperties(props);
             }
 
-            Debug.Log(
-                $"[ScoreManager] {aiNames[aiId]} gained kill #{newKills} | Score: {newScore}"
-            );
+            if (showDebugInfo)
+            {
+                Debug.Log(
+                    $"[ScoreManager] {aiNames[aiId]} gained kill #{newKills} | Score: {newScore}"
+                );
+            }
         }
 
         private static string GetAIScoreKey(int aiId)
@@ -450,7 +459,8 @@ namespace Hanzo.Networking
                 PhotonNetwork.CurrentRoom.SetCustomProperties(props);
             }
 
-            Debug.Log($"[ScoreManager] AI {aiNames[aiId]} death count: {aiDeaths[aiId]}");
+            if (showDebugInfo)
+                Debug.Log($"[ScoreManager] AI {aiNames[aiId]} death count: {aiDeaths[aiId]}");
         }
 
         /// <summary>
@@ -461,7 +471,8 @@ namespace Hanzo.Networking
             if (!aiNames.ContainsKey(aiId))
                 return;
             aiHitsTaken[aiId] += 1;
-            Debug.Log($"[ScoreManager] AI {aiNames[aiId]} hits taken: {aiHitsTaken[aiId]}");
+            if (showDebugInfo)
+                Debug.Log($"[ScoreManager] AI {aiNames[aiId]} hits taken: {aiHitsTaken[aiId]}");
         }
 
         /// <summary>
@@ -492,7 +503,8 @@ namespace Hanzo.Networking
             Hashtable props = new Hashtable { { DEATHS_KEY, newDeaths } };
             player.SetCustomProperties(props);
 
-            Debug.Log($"[ScoreManager] 💀 {player.NickName} has died {newDeaths} times");
+            if (showDebugInfo)
+                Debug.Log($"[ScoreManager] 💀 {player.NickName} has died {newDeaths} times");
 
             // Survival bonus disabled: no extra points awarded on death.
             // if (PhotonNetwork.IsMasterClient)
@@ -544,7 +556,8 @@ namespace Hanzo.Networking
             Hashtable props = new Hashtable { { HITS_TAKEN_KEY, newHits } };
             player.SetCustomProperties(props);
 
-            Debug.Log($"[ScoreManager] {player.NickName} has taken {newHits}/8 hits");
+            if (showDebugInfo)
+                Debug.Log($"[ScoreManager] {player.NickName} has taken {newHits}/8 hits");
 
             return newHits;
         }
@@ -563,7 +576,8 @@ namespace Hanzo.Networking
             Hashtable props = new Hashtable { { HITS_TAKEN_KEY, 0 } };
             player.SetCustomProperties(props);
 
-            Debug.Log($"[ScoreManager] Reset hit counter for {player.NickName}");
+            if (showDebugInfo)
+                Debug.Log($"[ScoreManager] Reset hit counter for {player.NickName}");
         }
 
         /// <summary>
@@ -749,6 +763,7 @@ namespace Hanzo.Networking
             Debug.Log("====================================");
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
             if (!showDebugInfo)
@@ -793,5 +808,6 @@ namespace Hanzo.Networking
 
             GUILayout.EndArea();
         }
+#endif
     }
 }
