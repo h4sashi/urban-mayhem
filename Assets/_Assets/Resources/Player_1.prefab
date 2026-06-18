@@ -4072,6 +4072,7 @@ MonoBehaviour:
   useMobileControls: 1
   mobileJoystick: {fileID: 4753393381974030272}
   mobileControlsUI: {fileID: 5501291232339902206}
+  showDebugInfo: 0
 --- !u!114 &3675924095626907759
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4527,6 +4528,7 @@ MonoBehaviour:
   fadeOverlaySpeed: 2
   damageColor: {r: 1, g: 0, b: 0, a: 1}
   healthUIFill: {fileID: 2178471464113668316}
+  healthText: {fileID: 0}
   healthBarSmoothSpeed: 5
   healthBarHighColor: {r: 0, g: 1, b: 0, a: 1}
   healthBarMidColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}

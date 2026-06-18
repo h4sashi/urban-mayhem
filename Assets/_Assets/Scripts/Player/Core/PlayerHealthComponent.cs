@@ -4,6 +4,7 @@ using Hanzo.AI;
 using Hanzo.Audio;
 using Hanzo.Core.Interfaces;
 using Hanzo.Networking;
+using Hanzo.Networking.Utils;
 using Hanzo.Player.Controllers;
 using Photon.Pun;
 using TMPro;
@@ -40,9 +41,11 @@ namespace Hanzo.Player.Core
         public bool animateHealthBar = true; // Toggle smooth animation
         public bool colorHealthBar = true; // Toggle color transitions based on health
 
+        private const float RespawnCountdownSeconds = 10f;
+
         [Header("Respawn Settings")]
         [SerializeField]
-        private float respawnDelay = 3f;
+        private float respawnDelay = RespawnCountdownSeconds;
 
         [SerializeField]
         private Vector3 respawnPosition = Vector3.zero;
@@ -93,6 +96,7 @@ namespace Hanzo.Player.Core
         {
             photonView = GetComponent<PhotonView>();
             currentHealth = maxHealth;
+            respawnDelay = RespawnCountdownSeconds;
             targetHealthFill = 1f;
 
             if (respawnUI != null)
@@ -835,19 +839,11 @@ namespace Hanzo.Player.Core
                     deathStunDuration
                 );
 
-                // Wait for the stun to finish, then respawn
-                StartCoroutine(RespawnAfterStun(stateController, deathStunDuration));
+                if (showDebugInfo)
+                    Debug.Log("[PlayerHealth] Death stun started. Respawn countdown is active.");
             }
-            else
-            {
-                // Fallback: no state controller — use the old countdown
-                if (IsLocalPlayer())
-                {
-                    if (respawnCoroutine != null)
-                        StopCoroutine(respawnCoroutine);
-                    respawnCoroutine = StartCoroutine(RespawnCountdown());
-                }
-            }
+
+            StartRespawnCountdownForLocalPlayer();
 
             // Sync death to remotes
             if (!isOfflineMode && photonView != null)
@@ -858,28 +854,6 @@ namespace Hanzo.Player.Core
                 }
                 catch { }
             }
-        }
-
-        /// <summary>
-        /// Waits for the stun animation to finish (stun duration + get-up anim),
-        /// then triggers a full respawn.  The player stays visible and animated
-        /// throughout — no DisablePlayer() call.
-        /// </summary>
-        private IEnumerator RespawnAfterStun(PlayerStateController stateCtrl, float stunDuration)
-        {
-            // Extra buffer: stun + get-up anim (~0.8 s) + small grace period
-            float waitTime = stunDuration + 1.0f;
-            yield return new WaitForSeconds(waitTime);
-
-            // Make sure stun has actually cleared before we proceed
-            float timeout = 3f;
-            while (stateCtrl.IsStunned && timeout > 0f)
-            {
-                timeout -= Time.deltaTime;
-                yield return null;
-            }
-
-            Respawn();
         }
 
         private void Die()
@@ -928,16 +902,24 @@ namespace Hanzo.Player.Core
             }
 
             // Start respawn countdown
-            if (IsLocalPlayer())
-            {
-                if (respawnCoroutine != null)
-                    StopCoroutine(respawnCoroutine);
-                respawnCoroutine = StartCoroutine(RespawnCountdown());
-            }
+            StartRespawnCountdownForLocalPlayer();
+        }
+
+        private void StartRespawnCountdownForLocalPlayer()
+        {
+            if (!IsLocalPlayer())
+                return;
+
+            if (respawnCoroutine != null)
+                StopCoroutine(respawnCoroutine);
+
+            respawnCoroutine = StartCoroutine(RespawnCountdown());
         }
 
         private IEnumerator RespawnCountdown()
         {
+            respawnDelay = RespawnCountdownSeconds;
+
             if (respawnUI != null)
             {
                 respawnUI.SetActive(true);
@@ -989,19 +971,28 @@ namespace Hanzo.Player.Core
             //         scoreManager.ResetPlayerHits(actorNum);
             // }
 
-            transform.position = respawnPosition;
-
             // Re-enable any components that may have been paused
             var movementController = GetComponent<PlayerMovementController>();
             if (movementController != null)
                 movementController.enabled = true;
+
+            var stateController = GetComponent<PlayerStateController>();
+            if (stateController != null)
+                stateController.ResetForRespawn();
+
+            respawnPosition = GetNextRespawnPosition();
 
             var rb = GetComponent<Rigidbody>();
             if (rb != null)
             {
                 rb.isKinematic = false;
                 rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                rb.position = respawnPosition;
             }
+
+            transform.position = respawnPosition;
+            Physics.SyncTransforms();
 
             // Make sure all renderers/colliders are on (in case DisablePlayer was called elsewhere)
             foreach (var col in GetComponentsInChildren<Collider>())
@@ -1113,6 +1104,15 @@ namespace Hanzo.Player.Core
             respawnPosition = position;
         }
 
+        private Vector3 GetNextRespawnPosition()
+        {
+            Spawner spawner = Spawner.Active != null ? Spawner.Active : FindObjectOfType<Spawner>();
+            if (spawner != null && spawner.TryGetRespawnPosition(out Vector3 spawnPosition))
+                return spawnPosition;
+
+            return respawnPosition;
+        }
+
         // ========== PHOTON RPCs ==========
 
         [PunRPC]
@@ -1145,6 +1145,11 @@ namespace Hanzo.Player.Core
             isDead = false;
             currentHealth = maxHealth;
             UpdateHealthText();
+
+            var stateController = GetComponent<PlayerStateController>();
+            if (stateController != null)
+                stateController.ResetForRespawn();
+
             transform.position = position;
             EnablePlayer();
 

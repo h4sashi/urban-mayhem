@@ -5005,6 +5005,7 @@ MonoBehaviour:
   useMobileControls: 0
   mobileJoystick: {fileID: 0}
   mobileControlsUI: {fileID: 0}
+  showDebugInfo: 0
 --- !u!114 &8519815261216678388
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5314,6 +5315,7 @@ MonoBehaviour:
   fadeOverlaySpeed: 2
   damageColor: {r: 1, g: 0, b: 0, a: 1}
   healthUIFill: {fileID: 0}
+  healthText: {fileID: 0}
   healthBarSmoothSpeed: 5
   healthBarHighColor: {r: 0, g: 1, b: 0, a: 1}
   healthBarMidColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
@@ -5346,9 +5348,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   behaviorProfile: {fileID: 11400000, guid: 16b18643ceab9465cbb40b4ef1489f38, type: 2}
-  utilityProfile: {fileID: 11400000, guid: 367688ad5aa144952b3b33cbf11f1edb, type: 2}
   enableAdaptiveTuning: 1
-  personality: 0
+  personality: 14
   detectionRadius: 31.4
   targetLayer:
     serializedVersion: 2

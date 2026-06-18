@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using Hanzo.Networking;
+using Hanzo.Player.Controllers;
+using Hanzo.Player.Core;
 using Photon.Pun;
 using UnityEngine;
 
@@ -104,29 +106,83 @@ namespace Hanzo.AI
                 return 0f;
 
             float priority = 0f;
+            float healthPressure = GetTargetHealthPressure(target);
+            float performance = GetTargetPerformanceScore(target);
+            float weakPerformance = Mathf.Clamp01(1f - performance / 45f);
+            bool recentlyUsedAbility = TargetRecentlyUsedAbility(target);
 
             switch (ai.Personality)
             {
+                case AIPersonality.Madman:
+                    priority += ai.WasRecentlyDamagedBy(target, AIPlayerController.GrudgeMemorySeconds)
+                        ? 8f
+                        : 0f;
+                    priority += hasLaunchableDestructible ? 7f : 0f;
+                    priority += Mathf.Max(0f, 10f - distance) * 0.25f;
+                    break;
                 case AIPersonality.Hunter:
-                    priority += GetHumanThreatScore(target) * 4f;
+                    priority += healthPressure * 10f;
+                    priority += recentlyUsedAbility ? 2f : 0f;
+                    priority += GetHumanThreatScore(target) * 0.75f;
+                    break;
+                case AIPersonality.Rival:
+                    if (ai.WasRecentlyDamagedBy(target, AIPlayerController.GrudgeMemorySeconds))
+                        priority += 14f;
+                    priority += GetHumanThreatScore(target) * 1.5f;
+                    break;
+                case AIPersonality.Opportunist:
+                    priority += healthPressure * 7f;
+                    priority += recentlyUsedAbility ? 5f : 0f;
+                    priority += distance > 5f ? 1.5f : -1f;
                     break;
                 case AIPersonality.Brawler:
                     priority += Mathf.Max(0f, 9f - distance) * 0.6f;
+                    break;
+                case AIPersonality.Trapper:
+                    priority += hasLaunchableDestructible ? 8f : 0f;
+                    priority += distance <= 12f ? 1.5f : -1f;
+                    break;
+                case AIPersonality.Coward:
+                    priority += healthPressure * 8f;
+                    priority += weakPerformance * 4f;
+                    priority -= Mathf.Clamp(performance / 8f, 0f, 7f);
+                    break;
+                case AIPersonality.Bully:
+                    priority += weakPerformance * 9f;
+                    priority += healthPressure * 3f;
+                    priority -= Mathf.Clamp(performance / 10f, 0f, 5f);
+                    break;
+                case AIPersonality.Cleaner:
+                    priority += healthPressure * 9f;
+                    priority += recentlyUsedAbility ? 2f : 0f;
+                    priority -= hasLaunchableDestructible ? 1f : 0f;
+                    break;
+                case AIPersonality.Berserker:
+                    priority += ai.LowHealthPressure * 6f;
+                    priority += healthPressure * Mathf.Lerp(2f, 7f, ai.LowHealthPressure);
+                    priority += hasLaunchableDestructible && ai.LowHealthPressure > 0.5f ? 4f : 0f;
+                    break;
+                case AIPersonality.Sniper:
+                    priority += distance >= 8f ? 4f : -4f;
+                    priority += recentlyUsedAbility ? 3f : 0f;
+                    break;
+                case AIPersonality.Defender:
+                    priority += distance <= 10f ? 3f : -3f;
+                    priority += hasLaunchableDestructible ? 1.5f : 0f;
                     break;
                 case AIPersonality.Trickster:
                     if (hasLaunchableDestructible)
                         priority += 6f;
                     priority += Mathf.PingPong(Time.time * 0.45f, 1.5f);
                     break;
-                case AIPersonality.Survivor:
-                    float closeDanger = Mathf.Clamp01(1f - distance / 8f);
-                    priority -= ai.LowHealthPressure * closeDanger * 10f;
-                    priority -= closeDanger * 1.5f;
+                case AIPersonality.Executioner:
+                    priority += recentlyUsedAbility ? 8f : 0f;
+                    priority += healthPressure * 4f;
+                    priority += hasLaunchableDestructible ? 3f : 0f;
                     break;
-                case AIPersonality.Rival:
-                    if (ai.WasRecentlyDamagedBy(target, 30f))
-                        priority += 14f;
-                    priority += GetHumanThreatScore(target) * 1.5f;
+                case AIPersonality.PackRat:
+                    priority += recentlyUsedAbility ? 4f : -1f;
+                    priority += weakPerformance * 2f;
                     break;
             }
 
@@ -267,6 +323,67 @@ namespace Hanzo.AI
             float deaths = scoreManager.GetPlayerDeaths(actorNumber) * 0.25f;
 
             return Mathf.Clamp(score + kills - deaths, 0f, 8f);
+        }
+
+        private float GetTargetHealthPressure(Transform target)
+        {
+            PlayerHealthComponent health =
+                target != null ? target.GetComponentInParent<PlayerHealthComponent>() : null;
+
+            if (health == null || health.MaxHealth <= 0f)
+                return 0f;
+
+            return 1f - Mathf.Clamp01(health.CurrentHealth / health.MaxHealth);
+        }
+
+        private bool TargetRecentlyUsedAbility(Transform target)
+        {
+            PlayerMovementController movement =
+                target != null ? target.GetComponentInParent<PlayerMovementController>() : null;
+
+            if (movement == null)
+                return false;
+
+            bool dashCommitted =
+                movement.DashAbility != null
+                && (movement.DashAbility.IsActive || movement.DashAbility.CooldownRemaining > 0.15f);
+
+            bool boostCommitted =
+                movement.SpeedBoostAbility != null
+                && (
+                    movement.SpeedBoostAbility.IsActive
+                    || movement.SpeedBoostAbility.CooldownRemaining > 0.15f
+                );
+
+            return dashCommitted || boostCommitted;
+        }
+
+        private float GetTargetPerformanceScore(Transform target)
+        {
+            if (target == null)
+                return 0f;
+
+            NetworkedScoreManager scoreManager = NetworkedScoreManager.Instance;
+            if (scoreManager == null)
+                return 0f;
+
+            AIPlayerController targetAI = target.GetComponentInParent<AIPlayerController>();
+            if (targetAI != null && targetAI.AIId != 0)
+            {
+                int aiId = targetAI.AIId;
+                return scoreManager.GetAIScore(aiId)
+                    + scoreManager.GetAIKills(aiId) * 10f
+                    - scoreManager.GetAIDeaths(aiId) * 4f;
+            }
+
+            PhotonView photonView = target.GetComponentInParent<PhotonView>();
+            if (photonView == null || photonView.Owner == null)
+                return 0f;
+
+            int actorNumber = photonView.Owner.ActorNumber;
+            return scoreManager.GetPlayerScore(actorNumber)
+                + scoreManager.GetPlayerKills(actorNumber) * 10f
+                - scoreManager.GetPlayerDeaths(actorNumber) * 4f;
         }
 
         private void CleanupNullAI()

@@ -3,10 +3,20 @@ namespace Hanzo.AI
     public enum AIPersonality
     {
         Auto,
+        Madman,
         Hunter,
-        Brawler,
-        Trickster,
-        Survivor,
         Rival,
+        Opportunist,
+        Brawler,
+        Trapper,
+        Coward,
+        Bully,
+        Cleaner,
+        Berserker,
+        Sniper,
+        Defender,
+        Trickster,
+        Executioner,
+        PackRat,
     }
 }

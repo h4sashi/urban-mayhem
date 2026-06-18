@@ -1,10 +1,13 @@
 using Photon.Pun;
+using Hanzo.Player.Core;
 using UnityEngine;
 
 namespace Hanzo.Networking.Utils
 {
     public class Spawner : MonoBehaviourPunCallbacks
     {
+        public static Spawner Active { get; private set; }
+
         [Header("Prefab (must be in Resources/)")]
         public GameObject[] playerPrefab; // put prefab in Assets/Resources/
 
@@ -23,6 +26,17 @@ namespace Hanzo.Networking.Utils
 
         // Character selection key (matches ShopManager and CharacterSelector)
         private const string SELECTED_CHARACTER_PREF_KEY = "SelectedCharacterIndex";
+
+        private void OnEnable()
+        {
+            Active = this;
+        }
+
+        private void OnDisable()
+        {
+            if (Active == this)
+                Active = null;
+        }
 
         // Start is called before the first frame update
         void Start()
@@ -120,6 +134,10 @@ namespace Hanzo.Networking.Utils
 
             // Fix position immediately after spawn
             StartCoroutine(StabilizePlayerPosition(player, spawnPos));
+
+            PlayerHealthComponent playerHealth = player.GetComponent<PlayerHealthComponent>();
+            if (playerHealth != null)
+                playerHealth.SetRespawnPosition(spawnPos);
 
             Debug.Log($"[Spawner] Spawned player '{resourceName}' at {spawnPos}");
         }
@@ -233,7 +251,33 @@ namespace Hanzo.Networking.Utils
                 }
             }
 
+            return TryGetAnyAssignedSpawnPoint(out result);
+        }
+
+        public bool TryGetRespawnPosition(out Vector3 position)
+        {
+            return FindValidSpawn(out position);
+        }
+
+        private bool TryGetAnyAssignedSpawnPoint(out Vector3 result)
+        {
             result = Vector3.zero;
+
+            if (spawnPoints == null || spawnPoints.Length == 0)
+                return false;
+
+            int startIndex = Random.Range(0, spawnPoints.Length);
+            for (int i = 0; i < spawnPoints.Length; i++)
+            {
+                int index = (startIndex + i) % spawnPoints.Length;
+                GameObject spawnPoint = spawnPoints[index];
+                if (spawnPoint == null || !spawnPoint.activeInHierarchy)
+                    continue;
+
+                result = spawnPoint.transform.position;
+                return true;
+            }
+
             return false;
         }
 

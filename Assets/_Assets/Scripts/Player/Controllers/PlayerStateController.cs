@@ -86,6 +86,7 @@ namespace Hanzo.Player.Controllers
         private float fallStartHeight = 0f;
         private float lastGroundedTime = 0f;
         private Coroutine stunCoroutine;
+        private Coroutine remoteStunVisualCoroutine;
 
         // Components
         private PhotonView photonView;
@@ -438,6 +439,48 @@ namespace Hanzo.Player.Controllers
             }
         }
 
+        public void ResetForRespawn()
+        {
+            if (stunCoroutine != null)
+            {
+                StopCoroutine(stunCoroutine);
+                stunCoroutine = null;
+            }
+
+            if (remoteStunVisualCoroutine != null)
+            {
+                StopCoroutine(remoteStunVisualCoroutine);
+                remoteStunVisualCoroutine = null;
+            }
+
+            isStunned = false;
+            isFalling = false;
+            isGrounded = true;
+            stunTimer = 0f;
+            lastGroundedTime = Time.time;
+
+            if (rb != null)
+            {
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                rb.drag = movementSettings != null ? movementSettings.GroundDrag : 6f;
+            }
+
+            if (animator != null)
+            {
+                animator.SetBool(StunnedHash, false);
+                animator.SetBool(GetUpHash, false);
+                animator.SetBool(FallingHash, false);
+                animator.SetBool(GroundedHash, true);
+            }
+
+            if (vfxController != null)
+            {
+                vfxController.HideStunVFX();
+                vfxController.RemoveStunTint();
+            }
+        }
+
         /// <summary>
         /// Cancels any active ability animations so stun cleanly overrides them.
         /// Called at the top of StartStun for both player and AI.
@@ -605,10 +648,19 @@ namespace Hanzo.Player.Controllers
                     vfxController.ApplyStunTint();
                     vfxController.ShowStunVFX();
                 }
-                StartCoroutine(RemoteStunVisualCoroutine(duration));
+
+                if (remoteStunVisualCoroutine != null)
+                    StopCoroutine(remoteStunVisualCoroutine);
+                remoteStunVisualCoroutine = StartCoroutine(RemoteStunVisualCoroutine(duration));
             }
             else
             {
+                if (remoteStunVisualCoroutine != null)
+                {
+                    StopCoroutine(remoteStunVisualCoroutine);
+                    remoteStunVisualCoroutine = null;
+                }
+
                 isStunned = false;
                 stunTimer = 0f;
                 if (animator != null)
@@ -659,6 +711,8 @@ namespace Hanzo.Player.Controllers
                 animator.SetBool(GetUpHash, false);
             if (vfxController != null)
                 vfxController.RemoveStunTint();
+
+            remoteStunVisualCoroutine = null;
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

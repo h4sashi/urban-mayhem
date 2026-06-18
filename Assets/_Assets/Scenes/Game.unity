@@ -77319,6 +77319,7 @@ MonoBehaviour:
   leaderboardContent: {fileID: 1884450602}
   leaderboardRowPrefab: {fileID: 7932097681129491760, guid: 3eec618698a1b4bf58f097b3ed8fb6d7, type: 3}
   sortByKills: 1
+  alwaysShowLocalPlayer: 1
   maxLeaderboardEntries: 5
   debugMode: 0
 --- !u!114 &1765590834
@@ -101849,6 +101850,7 @@ MonoBehaviour:
   fadeOverlaySpeed: 2
   damageColor: {r: 1, g: 0, b: 0, a: 1}
   healthUIFill: {fileID: 4218712173530398189}
+  healthText: {fileID: 0}
   healthBarSmoothSpeed: 5
   healthBarHighColor: {r: 0, g: 1, b: 0, a: 1}
   healthBarMidColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
@@ -106982,6 +106984,7 @@ MonoBehaviour:
   useMobileControls: 1
   mobileJoystick: {fileID: 6318761905937966177}
   mobileControlsUI: {fileID: 6493963456757493087}
+  showDebugInfo: 0
 --- !u!4 &7226457347542389552
 Transform:
   m_ObjectHideFlags: 0
@@ -107063,12 +107066,16 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3546674311411568189, guid: 2264f8220cfa94033bcf3c670b71640c, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4575247005934078089, guid: 2264f8220cfa94033bcf3c670b71640c, type: 3}
       propertyPath: sceneViewId
       value: 56
       objectReference: {fileID: 0}
+    - target: {fileID: 5972040450820038177, guid: 2264f8220cfa94033bcf3c670b71640c, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: cb7f6e0f916ea476e956d77ee61b79a4, type: 2}
     - target: {fileID: 8983863424528217549, guid: 2264f8220cfa94033bcf3c670b71640c, type: 3}
       propertyPath: m_LocalPosition.x
       value: -7.07
@@ -108772,6 +108779,7 @@ MonoBehaviour:
   useMobileControls: 0
   mobileJoystick: {fileID: 5657042914369930283}
   mobileControlsUI: {fileID: 4545531136624060818}
+  showDebugInfo: 0
 --- !u!4 &8087811929462592660
 Transform:
   m_ObjectHideFlags: 0
@@ -110173,6 +110181,63 @@ MonoBehaviour:
   m_AmplitudeGain: 1
   m_FrequencyGain: 1
   mNoiseOffsets: {x: 982.72705, y: -690.3036, z: -423.87546}
+--- !u!1001 &8825035988157750152
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -6.864
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 3.525
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -66.965
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7024976
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.7024976
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.08060468
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0.08060468
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: -90
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 76.909
+      objectReference: {fileID: 0}
+    - target: {fileID: 1458971403764868567, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: -90
+      objectReference: {fileID: 0}
+    - target: {fileID: 7006157170972599213, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
+      propertyPath: m_Name
+      value: Bazooka
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 1593e90f791104fa0927a5bfdca40612, type: 3}
 --- !u!137 &8842992261953053432
 SkinnedMeshRenderer:
   m_ObjectHideFlags: 0
@@ -110389,6 +110454,7 @@ MonoBehaviour:
   fadeOverlaySpeed: 2
   damageColor: {r: 1, g: 0, b: 0, a: 1}
   healthUIFill: {fileID: 611590286889505661}
+  healthText: {fileID: 0}
   healthBarSmoothSpeed: 5
   healthBarHighColor: {r: 0, g: 1, b: 0, a: 1}
   healthBarMidColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
@@ -111113,3 +111179,4 @@ SceneRoots:
   - {fileID: 7292021838918985215}
   - {fileID: 408508470524037157}
   - {fileID: 5792186234541671016}
+  - {fileID: 8825035988157750152}

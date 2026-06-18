@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Hanzo.AI;
 using Photon.Pun;
 using UnityEngine;
@@ -44,6 +45,24 @@ namespace Hanzo.Networking.Utils
         private bool showDebugInfo = true;
 
         private bool hasSpawnedAIs = false;
+        private static readonly AIPersonality[] PersonalityPool =
+        {
+            AIPersonality.Madman,
+            AIPersonality.Hunter,
+            AIPersonality.Rival,
+            AIPersonality.Opportunist,
+            AIPersonality.Brawler,
+            AIPersonality.Trapper,
+            AIPersonality.Coward,
+            AIPersonality.Bully,
+            AIPersonality.Cleaner,
+            AIPersonality.Berserker,
+            AIPersonality.Sniper,
+            AIPersonality.Defender,
+            AIPersonality.Trickster,
+            AIPersonality.Executioner,
+            AIPersonality.PackRat,
+        };
 
         void Start()
         {
@@ -96,6 +115,21 @@ namespace Hanzo.Networking.Utils
             hasSpawnedAIs = false;
         }
 
+        private static List<AIPersonality> CreateShuffledPersonalityDeck()
+        {
+            List<AIPersonality> deck = new List<AIPersonality>(PersonalityPool);
+
+            for (int i = 0; i < deck.Count; i++)
+            {
+                int swapIndex = Random.Range(i, deck.Count);
+                AIPersonality temp = deck[i];
+                deck[i] = deck[swapIndex];
+                deck[swapIndex] = temp;
+            }
+
+            return deck;
+        }
+
         private IEnumerator SpawnAIPlayers(int count, string prefabName)
         {
             // Get available AI prefab names
@@ -108,6 +142,7 @@ namespace Hanzo.Networking.Utils
                 "AIPlayer_5",
                 "AIPlayer_6",
             };
+            List<AIPersonality> personalityDeck = CreateShuffledPersonalityDeck();
 
             for (int i = 0; i < count; i++)
             {
@@ -127,7 +162,11 @@ namespace Hanzo.Networking.Utils
                 string selectedPrefab = availablePrefabs[Random.Range(0, availablePrefabs.Length)];
                 int aiId = -(i + 1);
                 string aiDisplayName = AINameCatalog.GetNameForId(aiId);
-                object[] instantiationData = { aiId };
+                if (i > 0 && i % personalityDeck.Count == 0)
+                    personalityDeck = CreateShuffledPersonalityDeck();
+
+                AIPersonality assignedPersonality = personalityDeck[i % personalityDeck.Count];
+                object[] instantiationData = { aiId, (int)assignedPersonality };
 
                 // Spawn AI using Photon
                 GameObject aiPlayer = PhotonNetwork.Instantiate(
@@ -145,7 +184,7 @@ namespace Hanzo.Networking.Utils
                     Hanzo.AI.AIPlayerController aiController =
                         aiPlayer.GetComponent<Hanzo.AI.AIPlayerController>();
                     if (aiController != null)
-                        aiController.ConfigureIdentity(aiId, aiDisplayName);
+                        aiController.ConfigureIdentity(aiId, aiDisplayName, assignedPersonality);
 
                     if (Hanzo.Networking.NetworkedScoreManager.Instance != null)
                         Hanzo.Networking.NetworkedScoreManager.Instance.RegisterAIPlayer(
@@ -157,7 +196,7 @@ namespace Hanzo.Networking.Utils
                     if (pv != null)
                     {
                         Debug.Log(
-                            $"[AI Spawner] ✓ Spawned {selectedPrefab} as {aiDisplayName} at {spawnPos} (slot {i + 1}/{count})"
+                            $"[AI Spawner] ✓ Spawned {selectedPrefab} as {aiDisplayName} [{assignedPersonality}] at {spawnPos} (slot {i + 1}/{count})"
                         );
                     }
 
