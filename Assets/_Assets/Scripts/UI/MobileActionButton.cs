@@ -21,18 +21,15 @@ namespace Hanzo.UI
         [SerializeField] private float pressScale = 0.9f;
         
         private System.Action onButtonPressed;
+        private System.Action onButtonReleased;
         private bool isPressed = false;
         private bool isEnabled = true;
         private Vector3 originalScale;
+        private bool hasCachedOriginalScale;
         
         private void Awake()
         {
-            originalScale = transform.localScale;
-            
-            if (buttonImage == null)
-            {
-                buttonImage = GetComponent<Image>();
-            }
+            CacheVisualState();
             
             if (cooldownOverlay != null)
             {
@@ -42,12 +39,20 @@ namespace Hanzo.UI
         
         public void Initialize(System.Action callback)
         {
-            onButtonPressed = callback;
+            Initialize(callback, null);
+        }
+
+        public void Initialize(System.Action pressedCallback, System.Action releasedCallback)
+        {
+            onButtonPressed = pressedCallback;
+            onButtonReleased = releasedCallback;
         }
         
         public void OnPointerDown(PointerEventData eventData)
         {
             if (!isEnabled) return;
+
+            CacheVisualState();
             
             isPressed = true;
             
@@ -67,13 +72,42 @@ namespace Hanzo.UI
         
         public void OnPointerUp(PointerEventData eventData)
         {
-            if (!isEnabled) return;
+            if (!isPressed) return;
             
             isPressed = false;
+            RestoreNormalVisualState();
+            onButtonReleased?.Invoke();
+        }
+
+        private void OnDisable()
+        {
+            if (isPressed)
+            {
+                isPressed = false;
+                onButtonReleased?.Invoke();
+            }
+
+            RestoreNormalVisualState();
+        }
+
+        public void SetEnabled(bool enabled)
+        {
+            CacheVisualState();
+            isEnabled = enabled;
             
             if (buttonImage != null)
             {
-                buttonImage.color = normalColor;
+                buttonImage.color = enabled ? normalColor : disabledColor;
+            }
+        }
+
+        private void RestoreNormalVisualState()
+        {
+            CacheVisualState();
+
+            if (buttonImage != null)
+            {
+                buttonImage.color = isEnabled ? normalColor : disabledColor;
             }
             
             if (showPressEffect)
@@ -81,14 +115,18 @@ namespace Hanzo.UI
                 transform.localScale = originalScale;
             }
         }
-        
-        public void SetEnabled(bool enabled)
+
+        private void CacheVisualState()
         {
-            isEnabled = enabled;
-            
-            if (buttonImage != null)
+            if (!hasCachedOriginalScale)
             {
-                buttonImage.color = enabled ? normalColor : disabledColor;
+                originalScale = transform.localScale;
+                hasCachedOriginalScale = true;
+            }
+            
+            if (buttonImage == null)
+            {
+                buttonImage = GetComponent<Image>();
             }
         }
         
