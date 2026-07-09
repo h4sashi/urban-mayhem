@@ -42,6 +42,7 @@ namespace Hanzo.Utilities
 
         private PlayerMovementController movementController;
         private CinemachineBasicMultiChannelPerlin noiseComponent;
+        private bool hasWarnedMissingDashAbility;
 
         // Zoom state
         private float originalFOV;
@@ -173,14 +174,16 @@ namespace Hanzo.Utilities
 
         private void Update()
         {
-            if (movementController.DashAbility.IsActive && !isZooming)
+            bool isDashActive = IsDashActive();
+
+            if (isDashActive && !isZooming)
             {
                 StartDashEffects();
             }
 
             if (isZooming)
             {
-                UpdateZoom();
+                UpdateZoom(isDashActive);
             }
 
             if (isSplashing && enableColorSplash)
@@ -192,6 +195,32 @@ namespace Hanzo.Utilities
             {
                 UpdateCameraShake();
             }
+        }
+
+        private bool IsDashActive()
+        {
+            if (movementController == null)
+            {
+                return false;
+            }
+
+            var dashAbility = movementController.DashAbility;
+            if (dashAbility != null)
+            {
+                hasWarnedMissingDashAbility = false;
+                return dashAbility.IsActive;
+            }
+
+            if (!hasWarnedMissingDashAbility)
+            {
+                Debug.LogWarning(
+                    "DashCameraEffect: PlayerMovementController has no DashAbility. Check that AbilitySettings is assigned and abilities initialize correctly.",
+                    this
+                );
+                hasWarnedMissingDashAbility = true;
+            }
+
+            return false;
         }
 
         private void StartDashEffects()
@@ -220,7 +249,7 @@ namespace Hanzo.Utilities
             Debug.Log("Dash effects started!");
         }
 
-        private void UpdateZoom()
+        private void UpdateZoom(bool isDashActive)
         {
             if (isZoomingIn)
             {
@@ -236,7 +265,7 @@ namespace Hanzo.Utilities
                     isZoomingIn = false;
                     zoomTimer = 0f;
 
-                    if (!movementController.DashAbility.IsActive)
+                    if (!isDashActive)
                     {
                         StartZoomOut();
                     }
@@ -244,7 +273,7 @@ namespace Hanzo.Utilities
             }
             else
             {
-                if (!movementController.DashAbility.IsActive)
+                if (!isDashActive)
                 {
                     zoomTimer += Time.deltaTime;
                     float progress = Mathf.Clamp01(zoomTimer / zoomOutDuration);

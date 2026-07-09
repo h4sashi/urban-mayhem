@@ -32,6 +32,10 @@ namespace Hanzo.Player.Controllers
         [SerializeField]
         private float rigBlendSpeed = 8f;
 
+        [Tooltip("Keeps the RigBuilder graph fully disabled until the bazooka rig is actually needed.")]
+        [SerializeField]
+        private bool disableRigBuilderWhenInactive = true;
+
         [Tooltip("Enable in Play Mode to keep the bazooka rig active while positioning IK targets and the weapon.")]
         [SerializeField]
         private bool forceRigActiveForSetup = false;
@@ -61,7 +65,11 @@ namespace Hanzo.Player.Controllers
 
         [Header("Validation")]
         [SerializeField]
-        private bool rebuildRigBuilderOnStart = true;
+        private bool rebuildRigBuilderOnStart = false;
+
+        [Tooltip("Rebuilds the Animation Rigging graph after re-enabling the bazooka rig.")]
+        [SerializeField]
+        private bool rebuildRigBuilderOnActivation = true;
 
         [Tooltip("Prevents Animation Rigging jobs from running when IK references cannot be resolved by the Animator.")]
         [SerializeField]
@@ -81,6 +89,7 @@ namespace Hanzo.Player.Controllers
         private bool subscribedToMovementController;
         private bool lastForceRigActiveForSetup;
         private Animator rigBuilderAnimator;
+        private bool rigSystemEnabled = true;
         private bool hasCachedHipsAimOffset;
         private Vector3 defaultHipsAimOffset;
         private Vector3 currentHipsAimOffset;
@@ -88,11 +97,8 @@ namespace Hanzo.Player.Controllers
         private void Awake()
         {
             CacheReferences();
-            rigSetupValid = ValidateRigSetup(false);
-            ConfigureRigBuilderForValidity();
-
-            currentWeight = GetTargetRigWeight();
-            ApplyRigWeight(currentWeight);
+            isBazookaActive = movementController != null && movementController.IsBazookaHolding;
+            InitializeRigState(false);
             lastForceRigActiveForSetup = forceRigActiveForSetup;
         }
 
@@ -102,16 +108,18 @@ namespace Hanzo.Player.Controllers
             SubscribeToMovementController();
 
             isBazookaActive = movementController != null && movementController.IsBazookaHolding;
-            rigSetupValid = ValidateRigSetup(true);
-            ConfigureRigBuilderForValidity();
-
-            currentWeight = GetTargetRigWeight();
-            ApplyRigWeight(currentWeight);
+            InitializeRigState(true);
             lastForceRigActiveForSetup = forceRigActiveForSetup;
         }
 
         private void Start()
         {
+            if (!ShouldRigBeActive())
+            {
+                DeactivateRigSystem();
+                return;
+            }
+
             if (rebuildRigBuilderOnStart)
             {
                 RebuildRigBuilder(false);
@@ -120,6 +128,7 @@ namespace Hanzo.Player.Controllers
 
         private void OnDisable()
         {
+            DeactivateRigSystem();
             UnsubscribeFromMovementController();
             RestoreHipsAimOffset();
         }
@@ -146,11 +155,20 @@ namespace Hanzo.Player.Controllers
             {
                 lastForceRigActiveForSetup = forceRigActiveForSetup;
 
-                if (forceRigActiveForSetup)
+                if (ShouldRigBeActive())
                 {
-                    rigSetupValid = ValidateRigSetup(true);
-                    ConfigureRigBuilderForValidity();
+                    ActivateRigSystem(true, rebuildRigBuilderOnActivation);
                 }
+                else
+                {
+                    DeactivateRigSystem();
+                }
+            }
+
+            if (!ShouldRigBeActive())
+            {
+                DeactivateRigSystem();
+                return;
             }
 
             if (!rigSetupValid)
@@ -185,6 +203,7 @@ namespace Hanzo.Player.Controllers
             forceRigActiveForSetup = true;
             lastForceRigActiveForSetup = forceRigActiveForSetup;
             currentWeight = activeRigWeight;
+            ActivateRigSystem(true, rebuildRigBuilderOnActivation);
             ApplyRigWeight(currentWeight);
         }
 
@@ -193,8 +212,7 @@ namespace Hanzo.Player.Controllers
         {
             forceRigActiveForSetup = false;
             lastForceRigActiveForSetup = forceRigActiveForSetup;
-            currentWeight = GetTargetRigWeight();
-            ApplyRigWeight(currentWeight);
+            DeactivateRigSystem();
         }
 
         private void HandleBazookaHoldChanged(bool active)
@@ -203,18 +221,38 @@ namespace Hanzo.Player.Controllers
 
             if (active)
             {
-                rigSetupValid = ValidateRigSetup(true);
-                ConfigureRigBuilderForValidity();
+                ActivateRigSystem(true, rebuildRigBuilderOnActivation);
+            }
+            else
+            {
+                DeactivateRigSystem();
             }
         }
 
         private void RebuildRigBuilder(bool logWarnings)
         {
             CacheReferences();
+
+            if (!ShouldRigBeActive())
+            {
+                DeactivateRigSystem();
+                return;
+            }
+
+            SetRigLayersActive(true);
             rigSetupValid = ValidateRigSetup(logWarnings);
             ConfigureRigBuilderForValidity();
 
             if (!rigSetupValid || rigBuilder == null || !Application.isPlaying)
+                return;
+
+            RebuildRigBuilderGraph(logWarnings);
+            ApplyRigWeight(currentWeight);
+        }
+
+        private void RebuildRigBuilderGraph(bool logWarnings)
+        {
+            if (rigBuilder == null || !Application.isPlaying)
                 return;
 
             rigBuilder.Clear();
@@ -223,6 +261,20 @@ namespace Hanzo.Player.Controllers
             {
                 Debug.LogWarning($"{nameof(BazookaRigController)} on {name}: RigBuilder could not build the bazooka rig graph.", this);
             }
+        }
+
+        private void InitializeRigState(bool logWarnings)
+        {
+            currentWeight = GetTargetRigWeight();
+
+            if (ShouldRigBeActive())
+            {
+                ActivateRigSystem(logWarnings, false);
+                ApplyRigWeight(currentWeight);
+                return;
+            }
+
+            DeactivateRigSystem();
         }
 
         private void CacheReferences()
@@ -301,7 +353,7 @@ namespace Hanzo.Player.Controllers
                 }
             }
 
-            if (runtimeRigs.Count > 0 || rigBuilder == null)
+            if (rigBuilder == null)
                 return;
 
             List<RigLayer> layers = rigBuilder.layers;
@@ -343,7 +395,12 @@ namespace Hanzo.Player.Controllers
 
         private float GetTargetRigWeight()
         {
-            return isBazookaActive || forceRigActiveForSetup ? activeRigWeight : inactiveRigWeight;
+            return ShouldRigBeActive() ? activeRigWeight : inactiveRigWeight;
+        }
+
+        private bool ShouldRigBeActive()
+        {
+            return isBazookaActive || forceRigActiveForSetup;
         }
 
         private void ApplyRigWeight(float weight)
@@ -355,6 +412,98 @@ namespace Hanzo.Player.Controllers
                 if (runtimeRigs[i] != null)
                 {
                     runtimeRigs[i].weight = weight;
+                }
+            }
+        }
+
+        private void ActivateRigSystem(bool logWarnings, bool rebuildGraph)
+        {
+            SetRigLayersActive(true);
+            SetRigSystemEnabled(true);
+            currentWeight = activeRigWeight;
+            ApplyRigWeight(currentWeight);
+
+            rigSetupValid = ValidateRigSetup(logWarnings);
+            ConfigureRigBuilderForValidity();
+
+            if (!rigSetupValid)
+                return;
+
+            if (rebuildGraph || disableRigBuilderWhenInactive)
+            {
+                RebuildRigBuilderGraph(logWarnings);
+                ApplyRigWeight(currentWeight);
+            }
+        }
+
+        private void DeactivateRigSystem()
+        {
+            if (disableRigBuilderWhenInactive
+                && Application.isPlaying
+                && !rigSystemEnabled
+                && Mathf.Approximately(currentWeight, inactiveRigWeight))
+            {
+                return;
+            }
+
+            currentWeight = inactiveRigWeight;
+            ApplyRigWeight(currentWeight);
+            SetRigLayersActive(false);
+            RestoreHipsAimOffset();
+
+            if (!disableRigBuilderWhenInactive || !Application.isPlaying)
+                return;
+
+            rigSetupValid = false;
+            SetRigSystemEnabled(false);
+        }
+
+        private void SetRigSystemEnabled(bool enabled)
+        {
+            CollectRuntimeRigs();
+
+            for (int i = 0; i < runtimeRigs.Count; i++)
+            {
+                if (runtimeRigs[i] != null && runtimeRigs[i].enabled != enabled)
+                {
+                    runtimeRigs[i].enabled = enabled;
+                }
+            }
+
+            if (rigBuilder != null)
+            {
+                if (enabled)
+                {
+                    if (!rigBuilder.enabled)
+                    {
+                        rigBuilder.enabled = true;
+                    }
+                }
+                else if (rigBuilder.enabled)
+                {
+                    if (Application.isPlaying)
+                    {
+                        rigBuilder.Clear();
+                    }
+
+                    rigBuilder.enabled = false;
+                }
+            }
+
+            rigSystemEnabled = enabled;
+        }
+
+        private void SetRigLayersActive(bool active)
+        {
+            if (rigBuilder == null)
+                return;
+
+            List<RigLayer> layers = rigBuilder.layers;
+            for (int i = 0; i < layers.Count; i++)
+            {
+                if (layers[i] != null)
+                {
+                    layers[i].active = active;
                 }
             }
         }
@@ -442,6 +591,12 @@ namespace Hanzo.Player.Controllers
             if (rigBuilder == null)
                 return;
 
+            if (!ShouldRigBeActive())
+            {
+                SetRigSystemEnabled(false);
+                return;
+            }
+
             if (!rigSetupValid && disableRigBuilderWhenInvalid)
             {
                 if (Application.isPlaying)
@@ -449,14 +604,11 @@ namespace Hanzo.Player.Controllers
                     rigBuilder.Clear();
                 }
 
-                rigBuilder.enabled = false;
+                SetRigSystemEnabled(false);
                 return;
             }
 
-            if (!rigBuilder.enabled)
-            {
-                rigBuilder.enabled = true;
-            }
+            SetRigSystemEnabled(true);
         }
 
         private bool ValidateRigSetup(bool logWarnings)

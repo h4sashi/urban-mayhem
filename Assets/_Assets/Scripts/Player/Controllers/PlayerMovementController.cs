@@ -114,6 +114,22 @@ namespace Hanzo.Player.Controllers
         [SerializeField]
         private Vector2 bazookaAimPitchLimits = new Vector2(-22f, 26f);
 
+        [Tooltip("Gradually rotates the player body when bazooka yaw reaches its rig limit, similar to lock-on turning.")]
+        [SerializeField]
+        private bool rotateBodyWhenBazookaYawAtLimit = true;
+
+        [Tooltip("How close to the yaw limit body turning starts. 0.8 means turning starts at 80% of the yaw range.")]
+        [SerializeField, Range(0f, 1f)]
+        private float bazookaBodyTurnStartNormalized = 0.8f;
+
+        [Tooltip("Maximum body turn speed in degrees per second while the player keeps aiming past the rig yaw range.")]
+        [SerializeField]
+        private float bazookaBodyTurnSpeed = 145f;
+
+        [Tooltip("How quickly local rig yaw is recentered while body turning is active.")]
+        [SerializeField]
+        private float bazookaYawRecenteringSpeed = 120f;
+
         [SerializeField]
         private bool snapCameraBlendOnBazookaSwitch = true;
 
@@ -171,6 +187,9 @@ namespace Hanzo.Player.Controllers
         private bool isBazookaHolding;
         private bool isBazookaHoldInputRequested;
         private bool lastForceBazookaHoldForWeaponPositioning;
+        private bool hasSubscribedToInput;
+        private bool hasSubscribedToStateController;
+        private bool hasWarnedMissingProjectileWeapon;
         private bool hasWarnedMissingBazookaHoldState;
         private bool hasBazookaLockPosition;
         private Vector3 bazookaLockPosition;
@@ -248,6 +267,7 @@ namespace Hanzo.Player.Controllers
                 ? bazookaMissileLauncher
                 : GetComponentInChildren<BazookaMissileLauncher>(true);
             lastNetworkRotation = transform.rotation;
+            ResetBazookaHoldStartupState();
 
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             if (rb.collisionDetectionMode == CollisionDetectionMode.Discrete)
@@ -262,11 +282,6 @@ namespace Hanzo.Player.Controllers
                 Debug.LogError("PlayerMovementController: MovementSettings not assigned!");
             }
 
-            if (abilitySettings == null)
-            {
-                Debug.LogError("PlayerMovementController: AbilitySettings not assigned!");
-            }
-
             InitializeStates();
             InitializeAbilities();
         }
@@ -278,6 +293,8 @@ namespace Hanzo.Player.Controllers
 
             if (photonView.IsMine)
             {
+                SubscribeToInput();
+                SubscribeToStateController();
                 SetupVirtualCamera();
                 SetBazookaCameraActive(false);
             }
@@ -409,14 +426,16 @@ namespace Hanzo.Player.Controllers
             // The state itself will handle whether to apply movement
 
             // Dash can interrupt any state
-            if (dashAbility.IsActive && !(currentState is DashingState))
+            bool isDashActive = dashAbility != null && dashAbility.IsActive;
+
+            if (isDashActive && dashingState != null && !(currentState is DashingState))
             {
                 ChangeState(dashingState);
                 return;
             }
 
             // Exit dash state
-            if (!dashAbility.IsActive && currentState is DashingState)
+            if (!isDashActive && currentState is DashingState)
             {
                 if (rawInput.magnitude > 0.1f)
                 {
@@ -568,6 +587,15 @@ namespace Hanzo.Player.Controllers
 
         private void InitializeAbilities()
         {
+            if (abilitySettings == null)
+            {
+                Debug.LogError(
+                    "PlayerMovementController: AbilitySettings not assigned. Dash and speed boost are disabled.",
+                    this
+                );
+                return;
+            }
+
             dashAbility = new DashAbility(abilitySettings);
             dashAbility.Initialize(this);
 
@@ -581,6 +609,14 @@ namespace Hanzo.Player.Controllers
 
         private void SubscribeToInput()
         {
+            if (hasSubscribedToInput)
+                return;
+
+            if (inputHandler == null)
+            {
+                inputHandler = GetComponent<PlayerInputHandler>();
+            }
+
             if (inputHandler == null)
                 return;
 
@@ -589,18 +625,55 @@ namespace Hanzo.Player.Controllers
             inputHandler.OnSpeedBoostInput += HandleSpeedBoostInput;
             inputHandler.OnBazookaHoldStarted += HandleBazookaHoldStarted;
             inputHandler.OnBazookaHoldEnded += HandleBazookaHoldEnded;
+            hasSubscribedToInput = true;
+        }
+
+        private void UnsubscribeFromInput()
+        {
+            if (!hasSubscribedToInput || inputHandler == null)
+                return;
+
+            inputHandler.OnMoveInput -= HandleMoveInput;
+            inputHandler.OnDashInput -= HandleDashInput;
+            inputHandler.OnSpeedBoostInput -= HandleSpeedBoostInput;
+            inputHandler.OnBazookaHoldStarted -= HandleBazookaHoldStarted;
+            inputHandler.OnBazookaHoldEnded -= HandleBazookaHoldEnded;
+            hasSubscribedToInput = false;
+        }
+
+        private void SubscribeToStateController()
+        {
+            if (hasSubscribedToStateController)
+                return;
+
+            if (stateController == null)
+            {
+                stateController = GetComponent<PlayerStateController>();
+            }
+
+            if (stateController == null)
+                return;
+
+            stateController.OnStunStarted += HandleStunStarted;
+            stateController.OnStunEnded += HandleStunEnded;
+            hasSubscribedToStateController = true;
+        }
+
+        private void UnsubscribeFromStateController()
+        {
+            if (!hasSubscribedToStateController || stateController == null)
+                return;
+
+            stateController.OnStunStarted -= HandleStunStarted;
+            stateController.OnStunEnded -= HandleStunEnded;
+            hasSubscribedToStateController = false;
         }
 
         private void OnEnable()
         {
-            lastForceBazookaHoldForWeaponPositioning = false;
+            lastForceBazookaHoldForWeaponPositioning = forceBazookaHoldForWeaponPositioning;
             SubscribeToInput();
-
-            if (stateController != null)
-            {
-                stateController.OnStunStarted += HandleStunStarted;
-                stateController.OnStunEnded += HandleStunEnded;
-            }
+            SubscribeToStateController();
         }
 
         private void OnDisable()
@@ -610,20 +683,8 @@ namespace Hanzo.Player.Controllers
             SetBazookaCameraActive(false);
             RestoreCameraBlendNow();
 
-            if (inputHandler != null)
-            {
-                inputHandler.OnMoveInput -= HandleMoveInput;
-                inputHandler.OnDashInput -= HandleDashInput;
-                inputHandler.OnSpeedBoostInput -= HandleSpeedBoostInput;
-                inputHandler.OnBazookaHoldStarted -= HandleBazookaHoldStarted;
-                inputHandler.OnBazookaHoldEnded -= HandleBazookaHoldEnded;
-            }
-
-            if (stateController != null)
-            {
-                stateController.OnStunStarted -= HandleStunStarted;
-                stateController.OnStunEnded -= HandleStunEnded;
-            }
+            UnsubscribeFromInput();
+            UnsubscribeFromStateController();
         }
 
         public CinemachineVirtualCamera GetCam()
@@ -768,6 +829,14 @@ namespace Hanzo.Player.Controllers
 
             isBazookaHoldInputRequested = true;
             RefreshBazookaHoldState(true);
+        }
+
+        private void ResetBazookaHoldStartupState()
+        {
+            forceBazookaHoldForWeaponPositioning = false;
+            isBazookaHoldInputRequested = false;
+            isBazookaHolding = false;
+            SetProjectileWeaponActive(false);
         }
 
         private void HandleBazookaHoldEnded()
@@ -1018,10 +1087,83 @@ namespace Hanzo.Player.Controllers
                 bazookaAimInput = Vector2.zero;
             }
 
+            ApplyBazookaBodyTurnAssist(deltaTime);
+
             bazookaAimAngles.x = Mathf.Clamp(bazookaAimAngles.x, bazookaAimYawLimits.x, bazookaAimYawLimits.y);
             bazookaAimAngles.y = Mathf.Clamp(bazookaAimAngles.y, bazookaAimPitchLimits.x, bazookaAimPitchLimits.y);
 
             ApplyBazookaCameraAim();
+        }
+
+        private void ApplyBazookaBodyTurnAssist(float deltaTime)
+        {
+            if (!rotateBodyWhenBazookaYawAtLimit || deltaTime <= 0f)
+                return;
+
+            float yaw = bazookaAimAngles.x;
+            if (Mathf.Abs(yaw) <= Mathf.Epsilon)
+                return;
+
+            float direction = Mathf.Sign(yaw);
+            float limit = GetYawLimitForDirection(direction);
+            if (limit <= Mathf.Epsilon)
+                return;
+
+            float startNormalized = Mathf.Clamp01(bazookaBodyTurnStartNormalized);
+            float start = limit * startNormalized;
+            float absYaw = Mathf.Abs(yaw);
+
+            if (absYaw <= start)
+                return;
+
+            float turnIntentX = bazookaAimInput.x;
+            bool hasTurnIntent = Mathf.Abs(turnIntentX) > 0.01f && Mathf.Sign(turnIntentX) == direction;
+            if (!hasTurnIntent)
+                return;
+
+            float overLimitFactor = Mathf.InverseLerp(start, limit, absYaw);
+            float turnSpeed = Mathf.Max(0f, bazookaBodyTurnSpeed) * overLimitFactor;
+            if (turnSpeed <= Mathf.Epsilon)
+                return;
+
+            float turnAmount = turnSpeed * deltaTime;
+            RotateBazookaBodyYaw(direction * turnAmount);
+
+            float targetYaw = direction * start;
+            float recenterStep = Mathf.Max(0f, bazookaYawRecenteringSpeed) * deltaTime;
+            bazookaAimAngles.x = Mathf.MoveTowards(bazookaAimAngles.x, targetYaw, recenterStep);
+        }
+
+        private float GetYawLimitForDirection(float direction)
+        {
+            if (direction >= 0f)
+            {
+                return Mathf.Max(0f, bazookaAimYawLimits.y);
+            }
+
+            return Mathf.Max(0f, Mathf.Abs(bazookaAimYawLimits.x));
+        }
+
+        private void RotateBazookaBodyYaw(float deltaYawDegrees)
+        {
+            if (Mathf.Abs(deltaYawDegrees) <= Mathf.Epsilon)
+                return;
+
+            Quaternion currentRotation = transform.rotation;
+            Quaternion nextRotation = Quaternion.Euler(
+                0f,
+                currentRotation.eulerAngles.y + deltaYawDegrees,
+                0f
+            );
+
+            if (rb != null && !rb.isKinematic)
+            {
+                rb.MoveRotation(nextRotation);
+            }
+            else
+            {
+                transform.rotation = nextRotation;
+            }
         }
 
         private void CaptureBazookaCameraRestPose()
@@ -1315,7 +1457,7 @@ namespace Hanzo.Player.Controllers
             if (animator == null)
                 return;
 
-            projectileWeapon?.SetActive(true);
+            SetProjectileWeaponActive(true);
 
             string statePath = GetPlayableStatePath(bazookaHoldStateName);
             if (string.IsNullOrEmpty(statePath))
@@ -1330,7 +1472,7 @@ namespace Hanzo.Player.Controllers
 
         private void RestoreAnimationAfterBazookaHold()
         {
-            projectileWeapon?.SetActive(false);
+            SetProjectileWeaponActive(false);
 
             if (animator == null)
                 return;
@@ -1359,6 +1501,24 @@ namespace Hanzo.Player.Controllers
             bool shouldRun = rawInput.magnitude > 0.1f;
             animator.SetBool(RunHash, shouldRun);
             CrossFadeToState(shouldRun ? "Run" : "Idle");
+        }
+
+        private void SetProjectileWeaponActive(bool active)
+        {
+            if (projectileWeapon != null)
+            {
+                projectileWeapon.SetActive(active);
+                return;
+            }
+
+            if (active && !hasWarnedMissingProjectileWeapon)
+            {
+                Debug.LogWarning(
+                    "PlayerMovementController: projectileWeapon is not assigned. Bazooka weapon visual will be skipped.",
+                    this
+                );
+                hasWarnedMissingProjectileWeapon = true;
+            }
         }
 
         private void CrossFadeToState(string stateName)

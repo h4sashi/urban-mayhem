@@ -46,6 +46,7 @@ namespace Hanzo.Player.Input
         private bool isBazookaHoldButtonActive;
         private bool isBazookaHoldKeyboardActive;
         private bool isBazookaHoldInputActive;
+        private bool hasSubscribedToMobileJoystick;
         
         // AI Detection
         private bool isAIControlled = false;
@@ -69,13 +70,22 @@ namespace Hanzo.Player.Input
             inputActions.Player.SpeedBoost.performed += OnSpeedBoostPerformed;
             
             // Setup mobile controls ONLY for local player (not AI)
-            if (!isAIControlled && photonView.IsMine)
+            if (!isAIControlled && photonView != null && photonView.IsMine)
             {
                 SetupMobileControls();
             }
             else
             {
                 DisableMobileControlsForRemotePlayer();
+            }
+        }
+
+        private void Start()
+        {
+            if (!isAIControlled && photonView != null && photonView.IsMine)
+            {
+                SetupMobileControls();
+                inputActions?.Enable();
             }
         }
         
@@ -90,14 +100,15 @@ namespace Hanzo.Player.Input
             
             if (shouldUseMobileControls && mobileJoystick != null)
             {
-                mobileJoystick.OnJoystickMove += OnMobileJoystickMove;
-                mobileJoystick.OnJoystickReleased += OnMobileJoystickReleased;
+                SubscribeToMobileJoystick();
                 
                 if (showDebugInfo)
                     Debug.Log("[LOCAL PLAYER] Mobile controls enabled");
             }
             else
             {
+                UnsubscribeFromMobileJoystick();
+
                 if (showDebugInfo)
                     Debug.Log("[LOCAL PLAYER] Keyboard/Gamepad controls enabled");
             }
@@ -123,16 +134,32 @@ namespace Hanzo.Player.Input
                     Debug.Log("[REMOTE PLAYER/AI] Mobile controls disabled");
             }
             
-            if (mobileJoystick != null)
-            {
-                mobileJoystick.OnJoystickMove -= OnMobileJoystickMove;
-                mobileJoystick.OnJoystickReleased -= OnMobileJoystickReleased;
-            }
+            UnsubscribeFromMobileJoystick();
 
             DisableBulletButton();
             DisableBazookaAimDragArea();
             
             shouldUseMobileControls = false;
+        }
+
+        private void SubscribeToMobileJoystick()
+        {
+            if (hasSubscribedToMobileJoystick || mobileJoystick == null)
+                return;
+
+            mobileJoystick.OnJoystickMove += OnMobileJoystickMove;
+            mobileJoystick.OnJoystickReleased += OnMobileJoystickReleased;
+            hasSubscribedToMobileJoystick = true;
+        }
+
+        private void UnsubscribeFromMobileJoystick()
+        {
+            if (!hasSubscribedToMobileJoystick || mobileJoystick == null)
+                return;
+
+            mobileJoystick.OnJoystickMove -= OnMobileJoystickMove;
+            mobileJoystick.OnJoystickReleased -= OnMobileJoystickReleased;
+            hasSubscribedToMobileJoystick = false;
         }
         
         private void OnEnable()
@@ -140,6 +167,7 @@ namespace Hanzo.Player.Input
             // Enable input for local player (not AI-controlled)
             if (!isAIControlled && photonView != null && photonView.IsMine)
             {
+                SetupMobileControls();
                 inputActions?.Enable();
 
                 if (shouldUseMobileControls && bazookaAimDragArea != null)
@@ -160,14 +188,14 @@ namespace Hanzo.Player.Input
             }
 
             inputActions?.Disable();
+            UnsubscribeFromMobileJoystick();
         }
         
         private void OnDestroy()
         {
             if (mobileJoystick != null)
             {
-                mobileJoystick.OnJoystickMove -= OnMobileJoystickMove;
-                mobileJoystick.OnJoystickReleased -= OnMobileJoystickReleased;
+                UnsubscribeFromMobileJoystick();
             }
 
             DisableBulletButton();
@@ -368,15 +396,14 @@ namespace Hanzo.Player.Input
 
         private void UpdateBazookaHoldKeyboardInput()
         {
-            bool shouldBeActive = false;
-
             if (bazookaHoldKey != Key.None && Keyboard.current != null)
             {
                 var keyControl = Keyboard.current[bazookaHoldKey];
-                shouldBeActive = keyControl != null && keyControl.isPressed;
+                if (keyControl != null && keyControl.wasPressedThisFrame)
+                {
+                    SetBazookaHoldKeyboardInput(!isBazookaHoldKeyboardActive);
+                }
             }
-
-            SetBazookaHoldKeyboardInput(shouldBeActive);
         }
         
         // ============================================

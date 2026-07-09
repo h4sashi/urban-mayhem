@@ -4069,9 +4069,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inputDeadzone: 0.1
+  bazookaHoldKey: 21
   useMobileControls: 1
   mobileJoystick: {fileID: 4753393381974030272}
+  bulletButton: {fileID: 0}
   mobileControlsUI: {fileID: 5501291232339902206}
+  bulletButtonName: BulletButton
+  bazookaAimDragArea: {fileID: 0}
+  bazookaAimDragAreaName: BazookaAimDragArea
+  autoCreateBazookaAimDragArea: 0
   showDebugInfo: 0
 --- !u!114 &3675924095626907759
 MonoBehaviour:
@@ -4091,11 +4097,40 @@ MonoBehaviour:
   cameraFollowTarget: {fileID: 7583561636982298817}
   cameraLookAtTarget: {fileID: 2619719941312669904}
   useCameraRelativeMovement: 1
+  bazookaPovCamera: {fileID: 0}
+  bazookaPovCameraName: fpsPOV
+  bazookaCameraFollowTarget: {fileID: 0}
+  bazookaCameraLookAtTarget: {fileID: 0}
+  normalCameraPriority: 10
+  bazookaPovCameraPriority: 30
+  disableBazookaCameraColliderWhileActive: 1
+  muteBazookaCameraNoiseWhileActive: 1
+  disableBazookaCameraComposerWhileActive: 1
+  disableBazookaCameraTransposerWhileActive: 1
+  keepPlayerCenteredDuringBazookaAim: 1
+  bazookaCameraAimCenter: {fileID: 0}
+  bazookaCameraAimCenterOffset: {x: 0, y: 0, z: 0}
+  useBazookaAimDragArea: 1
+  bazookaAimYawDragSensitivity: 18
+  bazookaAimPitchDragSensitivity: 14
+  useMovementInputToAimBazooka: 0
+  bazookaAimYawSpeed: 75
+  bazookaAimPitchSpeed: 55
+  bazookaAimYawLimits: {x: -45, y: 45}
+  bazookaAimPitchLimits: {x: -22, y: 26}
+  snapCameraBlendOnBazookaSwitch: 1
   groundLayer:
     serializedVersion: 2
     m_Bits: 513
   groundCheckDistance: 0.3
   fallCheckInterval: 0.1
+  projectileWeapon: {fileID: 0}
+  bazookaHoldStateName: Bazooka_Hold
+  bazookaHoldFadeDuration: 0.08
+  forceBazookaHoldForWeaponPositioning: 0
+  lockMovementWhileBazookaActive: 0
+  bazookaMissileLauncher: {fileID: 0}
+  bazookaFireDirection: {fileID: 0}
   showDebugInfo: 0
 --- !u!136 &494632994232701280
 CapsuleCollider:
@@ -4237,7 +4272,7 @@ MonoBehaviour:
   dashSFX: {fileID: 8300000, guid: 2dbd0a32e748f426a92dda74e2a5afcf, type: 3}
   hitSound: {fileID: 8300000, guid: 5878c832958a84267a83ff6055c86f72, type: 3}
   destructibleHitSound: {fileID: 8300000, guid: 6e14ce764820b4048945ff6e640a793f, type: 3}
-  showDebugGizmos: 0
+  showDebugGizmos: 1
   verboseLogging: 0
   launchTargetSearchRadius: 20
   launchTargetLayer:

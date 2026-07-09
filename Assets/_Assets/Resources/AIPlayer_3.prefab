@@ -5661,9 +5661,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inputDeadzone: 0.1
+  bazookaHoldKey: 21
   useMobileControls: 0
   mobileJoystick: {fileID: 6987585816206792613}
+  bulletButton: {fileID: 0}
   mobileControlsUI: {fileID: 8637719819408639290}
+  bulletButtonName: BulletButton
+  bazookaAimDragArea: {fileID: 0}
+  bazookaAimDragAreaName: BazookaAimDragArea
+  autoCreateBazookaAimDragArea: 1
   showDebugInfo: 0
 --- !u!114 &3543864706955756320
 MonoBehaviour:
@@ -5683,11 +5689,40 @@ MonoBehaviour:
   cameraFollowTarget: {fileID: 7472349424670307469}
   cameraLookAtTarget: {fileID: 8156915994807834104}
   useCameraRelativeMovement: 1
+  bazookaPovCamera: {fileID: 0}
+  bazookaPovCameraName: fpsPOV
+  bazookaCameraFollowTarget: {fileID: 0}
+  bazookaCameraLookAtTarget: {fileID: 0}
+  normalCameraPriority: 10
+  bazookaPovCameraPriority: 30
+  disableBazookaCameraColliderWhileActive: 1
+  muteBazookaCameraNoiseWhileActive: 1
+  disableBazookaCameraComposerWhileActive: 1
+  disableBazookaCameraTransposerWhileActive: 1
+  keepPlayerCenteredDuringBazookaAim: 1
+  bazookaCameraAimCenter: {fileID: 0}
+  bazookaCameraAimCenterOffset: {x: 0, y: 0, z: 0}
+  useBazookaAimDragArea: 1
+  bazookaAimYawDragSensitivity: 18
+  bazookaAimPitchDragSensitivity: 14
+  useMovementInputToAimBazooka: 0
+  bazookaAimYawSpeed: 75
+  bazookaAimPitchSpeed: 55
+  bazookaAimYawLimits: {x: -45, y: 45}
+  bazookaAimPitchLimits: {x: -22, y: 26}
+  snapCameraBlendOnBazookaSwitch: 1
   groundLayer:
     serializedVersion: 2
     m_Bits: 513
   groundCheckDistance: 0.3
   fallCheckInterval: 0.1
+  projectileWeapon: {fileID: 0}
+  bazookaHoldStateName: Bazooka_Hold
+  bazookaHoldFadeDuration: 0.08
+  forceBazookaHoldForWeaponPositioning: 0
+  lockMovementWhileBazookaActive: 1
+  bazookaMissileLauncher: {fileID: 0}
+  bazookaFireDirection: {fileID: 0}
   showDebugInfo: 0
 --- !u!136 &218553876951471
 CapsuleCollider:

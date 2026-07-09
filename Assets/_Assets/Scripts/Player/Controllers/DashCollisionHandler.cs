@@ -79,10 +79,11 @@ namespace Hanzo.Player.Controllers
         private LayerMask launchTargetLayer; // same as AI's targetLayer
 
         private PhotonView photonView;
-        private PlayerAbilityController abilityController;
         public PlayerMovementController playerMovementController;
-        private Rigidbody rb;
         private AudioSource audioSource;
+        private bool hasLoggedMissingAbilitySettings;
+        private bool hasLoggedMissingMovementController;
+        private bool hasLoggedMissingDashAbility;
 
         // Cooldown to prevent multiple hits in one dash
         private float lastPlayerHitTime = 0f;
@@ -103,31 +104,97 @@ namespace Hanzo.Player.Controllers
         private void Awake()
         {
             photonView = GetComponent<PhotonView>();
-            abilityController = GetComponent<PlayerAbilityController>();
-            rb = GetComponent<Rigidbody>();
+            ResolveMovementController();
 
             // Setup audio source
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
             audioSource.spatialBlend = 1f; // 3D sound
 
-            // CRITICAL: Verify components
-            if (abilityController == null)
+            DiagnoseLayerConfiguration();
+        }
+
+        private void Start()
+        {
+            ResolveMovementController();
+            ValidateRuntimeDependencies();
+        }
+
+        private void ResolveMovementController()
+        {
+            if (playerMovementController != null)
+                return;
+
+            playerMovementController = GetComponent<PlayerMovementController>();
+            if (playerMovementController == null)
             {
-                Debug.LogError(
-                    $"[{name}] DashCollisionHandler: PlayerAbilityController NOT FOUND!"
-                );
+                playerMovementController = GetComponentInParent<PlayerMovementController>();
             }
-            else if (playerMovementController == null || playerMovementController.DashAbility == null)
+
+            if (playerMovementController != null)
             {
-                Debug.LogError($"[{name}] DashCollisionHandler: DashAbility is NULL!");
+                hasLoggedMissingMovementController = false;
+            }
+        }
+
+        private void ValidateRuntimeDependencies()
+        {
+            if (abilitySettings == null)
+            {
+                LogMissingAbilitySettings();
+                return;
+            }
+
+            if (playerMovementController == null)
+            {
+                LogMissingMovementController();
+                return;
+            }
+
+            if (playerMovementController.DashAbility == null)
+            {
+                LogMissingDashAbility();
             }
             else
             {
-                // Debug.Log($"[{name}] ✅ DashCollisionHandler initialized successfully");
+                hasLoggedMissingDashAbility = false;
             }
+        }
 
-            DiagnoseLayerConfiguration();
+        private void LogMissingAbilitySettings()
+        {
+            if (hasLoggedMissingAbilitySettings)
+                return;
+
+            Debug.LogError(
+                $"[{name}] DashCollisionHandler: AbilitySettings is not assigned. Dash collisions are disabled.",
+                this
+            );
+            hasLoggedMissingAbilitySettings = true;
+        }
+
+        private void LogMissingMovementController()
+        {
+            if (hasLoggedMissingMovementController)
+                return;
+
+            Debug.LogError(
+                $"[{name}] DashCollisionHandler: PlayerMovementController not found. Dash collisions are disabled.",
+                this
+            );
+            hasLoggedMissingMovementController = true;
+        }
+
+        private void LogMissingDashAbility()
+        {
+            if (hasLoggedMissingDashAbility)
+                return;
+
+            Debug.LogWarning(
+                $"[{name}] DashCollisionHandler: DashAbility is not initialized yet. Dash collisions will wait for PlayerMovementController.",
+                this
+            );
+            hasLoggedMissingDashAbility = true;
         }
 
         private void DiagnoseLayerConfiguration()
@@ -154,10 +221,8 @@ namespace Hanzo.Player.Controllers
             if (!photonView.IsMine)
                 return;
 
-            bool isDashing =
-                playerMovementController != null
-                && playerMovementController.DashAbility != null
-                && playerMovementController.DashAbility.IsActive;
+            DashAbility dashAbility = GetDashAbility();
+            bool isDashing = dashAbility != null && dashAbility.IsActive;
 
             if (isDashing)
             {
@@ -179,8 +244,8 @@ namespace Hanzo.Player.Controllers
                     // Debug.Log($"[{name}] 🏃 Dash Active (Frame {framesSinceDashActive})");
                 }
 
-                CheckForPlayerCollisions();
-                CheckForDestructibleCollisions();
+                CheckForPlayerCollisions(dashAbility);
+                CheckForDestructibleCollisions(dashAbility);
             }
             else
             {
@@ -196,7 +261,34 @@ namespace Hanzo.Player.Controllers
             }
         }
 
-        private void CheckForPlayerCollisions()
+        private DashAbility GetDashAbility()
+        {
+            if (abilitySettings == null)
+            {
+                LogMissingAbilitySettings();
+                return null;
+            }
+
+            ResolveMovementController();
+
+            if (playerMovementController == null)
+            {
+                LogMissingMovementController();
+                return null;
+            }
+
+            DashAbility dashAbility = playerMovementController.DashAbility;
+            if (dashAbility == null)
+            {
+                LogMissingDashAbility();
+                return null;
+            }
+
+            hasLoggedMissingDashAbility = false;
+            return dashAbility;
+        }
+
+        private void CheckForPlayerCollisions(DashAbility dashAbility)
         {
             if (Time.time - lastPlayerHitTime < HIT_COOLDOWN)
                 return;
@@ -276,14 +368,14 @@ namespace Hanzo.Player.Controllers
                     continue;
                 }
 
-                HandleSuccessfulPlayerHit(targetPhotonView, targetState, hitCollider);
+                HandleSuccessfulPlayerHit(targetPhotonView, targetState, hitCollider, dashAbility);
 
                 // Only hit one player per check
                 break;
             }
         }
 
-        private void CheckForDestructibleCollisions()
+        private void CheckForDestructibleCollisions(DashAbility dashAbility)
         {
             if (Time.time - lastDestructibleHitTime < HIT_COOLDOWN)
                 return;
@@ -332,11 +424,11 @@ namespace Hanzo.Player.Controllers
                 float tagMultiplier = GetForceMultiplierForTag(hitCollider.tag);
                 knockbackForce *= tagMultiplier;
 
-                if (playerMovementController.DashAbility.StackLevel >= 2)
+                if (dashAbility.StackLevel >= 2)
                 {
                     knockbackForce *= 1.3f;
                 }
-                if (playerMovementController.DashAbility.StackLevel >= 3)
+                if (dashAbility.StackLevel >= 3)
                 {
                     knockbackForce *= 1.5f;
                 }
@@ -491,7 +583,8 @@ namespace Hanzo.Player.Controllers
         private void HandleSuccessfulPlayerHit(
             PhotonView targetPhotonView,
             PlayerStateController targetState,
-            Collider hitCollider
+            Collider hitCollider,
+            DashAbility dashAbility
         )
         {
             if (targetState.IsStunned)
@@ -511,9 +604,9 @@ namespace Hanzo.Player.Controllers
             Vector3 knockbackDir = (hitCollider.transform.position - transform.position).normalized;
             float knockbackForce = abilitySettings.KnockbackForce;
 
-            if (playerMovementController.DashAbility.StackLevel >= 2)
+            if (dashAbility.StackLevel >= 2)
                 knockbackForce *= 1.3f;
-            if (playerMovementController.DashAbility.StackLevel >= 3)
+            if (dashAbility.StackLevel >= 3)
                 knockbackForce *= 1.5f;
 
             targetPhotonView.RPC(
